@@ -111,7 +111,8 @@ jobs:
               echo "Running public site sanity check..."
               HTTP=$(curl -s -o /dev/null -w "%{http_code}" "https://parking.gashis.ch/parking/" || echo "000")
               echo "public_site_status=$HTTP"
-              if [ "$HTTP" != "200" ]; then
+              # Accept 200 OK or 301 redirect (we redirect /parking -> /)
+              if [ "$HTTP" != "200" ] && [ "$HTTP" != "301" ]; then
                 echo "Public site check failed (status=$HTTP)" >&2
                 exit 3
               fi

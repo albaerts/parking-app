@@ -36,8 +36,39 @@ docker pull ${REGISTRY}/${REPO_OWNER}/parking-backend:${IMAGE_TAG}
 echo "Pulling frontend image: ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}"
 docker pull ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}
 
-# Recreate stack
-docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate
+# Ensure any previous stack is stopped/removed to avoid container rename conflicts
+echo "Stopping any existing compose stack (safe): docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true"
+docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true
+
+# Recreate stack (with a safe retry if a rename/conflict error occurs)
+echo "Starting compose stack: docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate"
+if docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then
+	echo "Compose up succeeded"
+else
+	echo "docker-compose up failed — attempting to resolve potential name conflicts by removing containers matching service names"
+	# Attempt to remove containers that contain the service name (aggressive but useful for stale containers)
+	for svc in $(docker-compose -f ${COMPOSE_FILE} config --services 2>/dev/null || true); do
+		if [ -z "${svc}" ]; then
+			continue
+		fi
+		echo "Checking for containers matching service name: ${svc}"
+		ids=$(docker ps -a --filter "name=${svc}" -q || true)
+		if [ -n "${ids}" ]; then
+			echo "Removing containers for service ${svc}: ${ids}"
+			docker rm -f ${ids} || true
+		fi
+	done
+
+	echo "Retrying docker-compose up once more"
+	if docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then
+		echo "Compose up succeeded on retry"
+	else
+		echo "Compose up still failed after retry. Showing docker ps -a for diagnostics:" >&2
+		docker ps -a || true
+		echo "Exiting with error (compose failed)" >&2
+		exit 1
+	fi
+fi
 
 echo "Deploy finished."
 

@@ -28,7 +28,8 @@ services:
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       # TLS certs should be mounted here when available
-      - ./deploy/certs:/etc/letsencrypt:ro
+      # mount the system Let's Encrypt directory into the proxy container
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - frontend
       - backend

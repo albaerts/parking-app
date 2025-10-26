@@ -54,10 +54,17 @@ jobs:
     name: Deploy to Server (pull images & up)
     runs-on: ubuntu-latest
     needs: build-and-push
-    if: ${{ secrets.SSH_PRIVATE_KEY != '' && secrets.SSH_HOST != '' && secrets.REMOTE_PATH != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        run: |
+          # At job runtime we can read secrets; fail with a clear message if any are missing.
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.SSH_HOST }}" ] || [ -z "${{ secrets.REMOTE_PATH }}" ]; then
+            echo "Required deploy secrets are missing. Ensure SSH_PRIVATE_KEY, SSH_HOST and REMOTE_PATH are set in repository secrets." >&2
+            exit 1
+          fi
 
       - name: Run remote deploy script
         uses: appleboy/ssh-action@v0.1.8

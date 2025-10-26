@@ -15,8 +15,12 @@ RUN apt-get update \
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy application code
-COPY backend/ /app/
+# Copy application code into a package folder so imports like `backend.server_gashis` work
+RUN mkdir -p /app/backend
+COPY backend/ /app/backend/
+
+# Ensure the appuser will own the backend files so runtime writes (sqlite journals etc.) succeed
+RUN chown -R appuser:appuser /app/backend || true
 
 # Expose port
 EXPOSE 8000

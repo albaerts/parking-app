@@ -75,3 +75,12 @@ Check:
 ## Hinweise
 - Keine neuen Benutzer werden erstellt. Bestehende `@test.com`-User werden nicht verändert.
 - Möchtest du die Subdomain auf Root nutzen (ohne `/parking/`), dann muss im Frontend `package.json` die `homepage` entfernt/angepasst und neu gebaut werden. Das ist optional und nicht Teil dieser Standard-Variante.
+
+## Änderungen (automatisch angewendet)
+
+- `docker-compose.prod.yml` wurde angepasst, sodass das gesamte `./backend` Verzeichnis in den Container gemountet wird (`./backend:/app/backend`). Das verhindert Probleme, bei denen `parking.db` als Verzeichnis existiert oder der Container-User keine Journals anlegen kann.
+- `deploy/nginx.conf` wurde temporär auf HTTP-only gesetzt, damit der Proxy ohne TLS-Zertifikate startet. Für Produktion solltest du wieder die HTTPS-Variante verwenden und `/etc/letsencrypt` mounten.
+- `deploy/update.sh` setzt standardmäßig `REPO_OWNER=albaerts` damit `docker pull` standardmäßig auf deinen GHCR-Namespace verweist.
+- `backend/Dockerfile` setzt die Besitzrechte auf `/app/backend` beim Build, damit der non-root `appuser` Schreibzugriff hat.
+
+Siehe Branch `deploy/fix-db-nginx` (erstellt und gepusht) für die Änderungen auf GitHub.

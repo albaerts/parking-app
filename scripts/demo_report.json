@@ -1,0 +1,94 @@
+{
+  "logins": {
+    "user@test.com": {
+      "token": "dev-token-user",
+      "user": {
+        "id": 1,
+        "email": "user@test.com",
+        "name": "Test User",
+        "role": "user"
+      }
+    },
+    "owner@test.com": {
+      "token": "dev-token-owner",
+      "user": {
+        "id": 1,
+        "email": "owner@test.com",
+        "name": "Test Owner",
+        "role": "owner"
+      }
+    },
+    "admin@test.com": {
+      "token": "dev-token-admin",
+      "user": {
+        "id": 1,
+        "email": "admin@test.com",
+        "name": "Test Admin",
+        "role": "admin"
+      }
+    }
+  },
+  "register": {
+    "token": "dev-token-user",
+    "user": {
+      "id": 2,
+      "email": "scripted-dev@example.com",
+      "name": "Scripted Dev",
+      "role": "user"
+    }
+  },
+  "stats": {
+    "total": 8,
+    "free": 5,
+    "occupied": 3,
+    "reserved": 0
+  },
+  "parking_spots_count": 8,
+  "parking_spots_sample": [
+    {
+      "id": 2,
+      "name": "Basel SBB Centralbahnplatz",
+      "address": "Centralbahnpl. 20, 4051 Basel",
+      "latitude": 47.5474,
+      "longitude": 7.5892,
+      "status": "occupied",
+      "price_per_hour": 3.8
+    },
+    {
+      "id": 3,
+      "name": "Bern Bahnhof Parking",
+      "address": "Bahnhofplatz 10A, 3011 Bern",
+      "latitude": 46.9481,
+      "longitude": 7.4474,
+      "status": "free",
+      "price_per_hour": 4.2
+    },
+    {
+      "id": 4,
+      "name": "Genève Aéroport P51",
+      "address": "Route de l'Aéroport 21, 1215 Genève",
+      "latitude": 46.2044,
+      "longitude": 6.1432,
+      "status": "free",
+      "price_per_hour": 5.0
+    },
+    {
+      "id": 8,
+      "name": "Lausanne Gare CFF",
+      "address": "Place de la Gare 9, 1003 Lausanne",
+      "latitude": 46.5197,
+      "longitude": 6.6323,
+      "status": "occupied",
+      "price_per_hour": 4.0
+    },
+    {
+      "id": 5,
+      "name": "Luzern Parkhaus Bahnhof",
+      "address": "Bahnhofstrasse 3, 6003 Luzern",
+      "latitude": 47.0502,
+      "longitude": 8.3093,
+      "status": "occupied",
+      "price_per_hour": 3.9
+    }
+  ]
+}

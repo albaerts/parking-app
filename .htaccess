@@ -1,0 +1,11 @@
+RewriteEngine On
+
+# API Routes - leite alle API Calls an api.php weiter
+RewriteCond %{REQUEST_URI} ^/parking/api/(.*)$
+RewriteRule ^(.*)$ /parking/api/api.php [QSA,L]
+
+# Frontend Routes - für React Router
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} ^/parking/
+RewriteRule ^parking/(.*)$ /parking/index.html [QSA,L]

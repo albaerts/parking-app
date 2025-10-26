@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- A4 portrait: 210mm x 297mm -->
+<svg width="210mm" height="297mm" viewBox="0 0 210 297" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style type="text/css"><![CDATA[
+      .title { font: bold 7px sans-serif; }
+      .h1 { font: bold 5px sans-serif; }
+      .label { font: 3.2px sans-serif; }
+      .label-sm { font: 2.6px sans-serif; }
+      .note { font: 2.8px sans-serif; fill: #333; }
+      .box { fill: #f8f8f8; stroke: #222; stroke-width: 0.3; }
+      .pin { font: 2.6px monospace; }
+      .wire5 { stroke: #d22; stroke-width: 0.6; }
+      .wire3v3 { stroke: #2aa; stroke-width: 0.5; }
+      .wireg { stroke: #000; stroke-width: 0.6; }
+      .wireSig { stroke: #06c; stroke-width: 0.5; stroke-dasharray: 1.2 0.8; }
+      .cap { fill: none; stroke: #555; stroke-width: 0.4; }
+      .cap-fill { fill: #eee; stroke: #555; stroke-width: 0.3; }
+      .legend { font: 3px sans-serif; }
+    ]]></style>
+  </defs>
+
+  <!-- Title -->
+  <text x="105" y="10" class="title" text-anchor="middle">Smart Parking – ESP32 + SIM7600 HAT (A) – Verdrahtung (A4)</text>
+  <text x="105" y="15" class="label" text-anchor="middle">2×18650 → Pololu S13V20F5 (5 V) → 5V‑Bus → SIM7600 HAT A + Servo + ESP32 | GND gemeinsam</text>
+
+  <!-- Power chain: Battery -> Pololu -> 5V Bus -->
+  <rect x="10" y="25" width="40" height="20" rx="2" class="box"/>
+  <text x="30" y="31" class="h1" text-anchor="middle">Batterie</text>
+  <text x="30" y="36" class="label" text-anchor="middle">2×18650 (2S, geschützt)</text>
+  <text x="30" y="40.5" class="label-sm" text-anchor="middle">~7.4 V nominal</text>
+  <!-- Battery terminals -->
+  <circle cx="50" cy="35" r="1" fill="#d22"/>
+  <circle cx="10" cy="35" r="1" fill="#000"/>
+  <text x="51.5" y="35.5" class="label-sm">+</text>
+  <text x="5" y="35.5" class="label-sm">−</text>
+
+  <!-- Pololu S13V20F5 Regulator -->
+  <rect x="60" y="25" width="45" height="20" rx="2" class="box"/>
+  <text x="82.5" y="31" class="h1" text-anchor="middle">Pololu S13V20F5</text>
+  <text x="82.5" y="36" class="label" text-anchor="middle">Step‑Up/Down Regler 5 V / 2 A</text>
+  <!-- IN/OUT pins -->
+  <circle cx="60" cy="35" r="1" fill="#d22"/>
+  <circle cx="60" cy="42" r="1" fill="#000"/>
+  <text x="61.5" y="35.5" class="label-sm">VIN</text>
+  <text x="61.5" y="42.5" class="label-sm">GND</text>
+  <circle cx="105" cy="35" r="1" fill="#d22"/>
+  <circle cx="105" cy="42" r="1" fill="#000"/>
+  <text x="103" y="35.5" class="label-sm" text-anchor="end">VOUT 5V</text>
+  <text x="103" y="42.5" class="label-sm" text-anchor="end">GND</text>
+
+  <!-- Wires: Battery + to Reg VIN; Battery - to GND -->
+  <line x1="50" y1="35" x2="60" y2="35" class="wire5"/>
+  <line x1="10" y1="35" x2="60" y2="42" class="wireg"/>
+
+  <!-- 5V Bus (red) and GND Bus (black) horizontal lines -->
+  <line x1="105" y1="35" x2="200" y2="35" class="wire5"/>
+  <line x1="105" y1="42" x2="200" y2="42" class="wireg"/>
+  <text x="198" y="33.5" class="label-sm" text-anchor="end">5V‑Bus</text>
+  <text x="198" y="47" class="label-sm" text-anchor="end">GND‑Bus</text>
+
+  <!-- Bulk caps near HAT -->
+  <rect x="118" y="28" width="6" height="14" class="cap-fill"/>
+  <line x1="121" y1="28" x2="121" y2="42" class="cap"/>
+  <text x="121" y="27" class="label-sm" text-anchor="middle">470–1000 µF</text>
+  <line x1="121" y1="35" x2="105" y2="35" class="wire5"/>
+  <line x1="121" y1="42" x2="105" y2="42" class="wireg"/>
+
+  <!-- ESP32 Module -->
+  <rect x="20" y="75" width="60" height="60" rx="2" class="box"/>
+  <text x="50" y="81" class="h1" text-anchor="middle">ESP32 DevKit</text>
+  <!-- ESP32 pins (left/right labels) -->
+  <text x="22" y="90" class="pin">VIN/5V</text>
+  <text x="22" y="96" class="pin">3V3</text>
+  <text x="22" y="102" class="pin">GND</text>
+  <text x="22" y="108" class="pin">GPIO16 (RX2)</text>
+  <text x="22" y="114" class="pin">GPIO17 (TX2)</text>
+  <text x="22" y="120" class="pin">GPIO18 (Servo)</text>
+  <text x="22" y="126" class="pin">GPIO19 (Hall)</text>
+  <text x="22" y="132" class="pin">GPIO4 (PWRKEY opt.)</text>
+  <text x="22" y="138" class="pin">GND</text>
+
+  <!-- SIM7600 HAT A -->
+  <rect x="125" y="75" width="65" height="50" rx="2" class="box"/>
+  <text x="157.5" y="81" class="h1" text-anchor="middle">SIM7600 HAT (A)</text>
+  <text x="128" y="88" class="pin">5V</text>
+  <text x="128" y="94" class="pin">GND</text>
+  <text x="128" y="100" class="pin">TXD → ESP32 RX2</text>
+  <text x="128" y="106" class="pin">RXD ← ESP32 TX2</text>
+  <text x="128" y="112" class="pin">PWRKEY</text>
+
+  <!-- Wires: ESP32 UART to HAT -->
+  <line x1="80" y1="108" x2="125" y2="100" class="wireSig"/>
+  <line x1="80" y1="114" x2="125" y2="106" class="wireSig"/>
+  <text x="102" y="98" class="label-sm" text-anchor="middle">TXD→RX2 (GPIO16)</text>
+  <text x="102" y="118" class="label-sm" text-anchor="middle">RXD←TX2 (GPIO17)</text>
+
+  <!-- Wires: Power from 5V and GND bus to HAT and ESP32 (optional) -->
+  <line x1="150" y1="35" x2="150" y2="88" class="wire5"/>
+  <line x1="150" y1="42" x2="150" y2="94" class="wireg"/>
+  <circle cx="150" cy="88" r="1" fill="#d22"/>
+  <circle cx="150" cy="94" r="1" fill="#000"/>
+  <text x="152" y="88.5" class="label-sm">→ HAT 5V</text>
+  <text x="152" y="94.5" class="label-sm">→ HAT GND</text>
+
+  <!-- Optional: power ESP32 from 5V bus (if nicht per USB) -->
+  <line x1="60" y1="35" x2="60" y2="90" class="wire5"/>
+  <line x1="60" y1="42" x2="60" y2="102" class="wireg"/>
+  <circle cx="60" cy="90" r="1" fill="#d22"/>
+  <circle cx="60" cy="102" r="1" fill="#000"/>
+  <text x="62" y="90.5" class="label-sm">→ ESP32 VIN</text>
+  <text x="62" y="102.5" class="label-sm">→ ESP32 GND</text>
+
+  <!-- Servo -->
+  <rect x="125" y="150" width="35" height="22" rx="2" class="box"/>
+  <text x="142.5" y="156" class="h1" text-anchor="middle">Servo SG92R</text>
+  <text x="128" y="160" class="pin">V+ (5V)</text>
+  <text x="128" y="165" class="pin">GND</text>
+  <text x="128" y="170" class="pin">Signal</text>
+  <!-- Servo caps -->
+  <rect x="170" y="152" width="5" height="14" class="cap-fill"/>
+  <line x1="172.5" y1="152" x2="172.5" y2="166" class="cap"/>
+  <text x="172.5" y="150" class="label-sm" text-anchor="middle">220–470 µF</text>
+
+  <!-- Servo power from 5V/GND bus -->
+  <line x1="160" y1="35" x2="160" y2="160" class="wire5"/>
+  <line x1="160" y1="42" x2="160" y2="165" class="wireg"/>
+
+  <!-- Servo signal from ESP32 GPIO18 -->
+  <line x1="80" y1="120" x2="128" y2="170" class="wireSig"/>
+  <text x="90" y="140" class="label-sm">GPIO18 → Servo SIG</text>
+
+  <!-- Hall Sensor A3144 -->
+  <rect x="25" y="150" width="40" height="22" rx="2" class="box"/>
+  <text x="45" y="156" class="h1" text-anchor="middle">Hall A3144</text>
+  <text x="28" y="161" class="pin">VCC (3V3)</text>
+  <text x="28" y="166" class="pin">GND</text>
+  <text x="28" y="171" class="pin">OUT</text>
+
+  <!-- Hall wiring: 3V3, GND, OUT to GPIO19 -->
+  <line x1="40" y1="96" x2="40" y2="161" class="wire3v3"/>
+  <line x1="40" y1="102" x2="40" y2="166" class="wireg"/>
+  <line x1="80" y1="126" x2="65" y2="171" class="wireSig"/>
+  <text x="42" y="96" class="label-sm">→ 3V3</text>
+  <text x="42" y="102" class="label-sm">→ GND</text>
+  <text x="70" y="170" class="label-sm">GPIO19</text>
+
+  <!-- Hall pull-up note -->
+  <line x1="35" y1="171" x2="35" y2="160" class="wire3v3"/>
+  <line x1="35" y1="160" x2="40" y2="160" class="wire3v3"/>
+  <text x="25" y="182" class="note">Hinweis: A3144 ist Open‑Collector → interner INPUT_PULLUP nutzen
+  oder 10 kΩ Pull‑Up von OUT nach 3V3.</text>
+
+  <!-- PWRKEY optional control -->
+  <line x1="80" y1="132" x2="128" y2="112" class="wireSig"/>
+  <text x="100" y="118" class="label-sm">GPIO4 → PWRKEY (optional via NPN)</text>
+  <text x="157.5" y="127" class="note" text-anchor="middle">Falls HAT keinen Button nutzt: kurzer Low‑Puls über Transistor.</text>
+
+  <!-- Legend -->
+  <rect x="15" y="205" width="180" height="70" rx="2" class="box"/>
+  <text x="105" y="211" class="h1" text-anchor="middle">Legende & Hinweise</text>
+  <text x="20" y="218" class="legend">• 5V‑Bus (rot): speist SIM7600 HAT (A) und Servo direkt vom Pololu‑Regler.</text>
+  <text x="20" y="223" class="legend">• GND‑Bus (schwarz): alle Massepunkte verbinden (gemeinsame Masse!).</text>
+  <text x="20" y="228" class="legend">• ESP32 kann über USB oder über VIN vom 5V‑Bus versorgt werden (nicht beides).</text>
+  <text x="20" y="233" class="legend">• Bulk‑Elkos nah an HAT (470–1000 µF) und Servo (220–470 µF) gegen Spannungseinbrüche.</text>
+  <text x="20" y="238" class="legend">• UART: ESP32 TX2 (GPIO17) → HAT RXD, ESP32 RX2 (GPIO16) ← HAT TXD (Kreuzung beachten).</text>
+  <text x="20" y="243" class="legend">• Servo Signal: GPIO18 (PWM). Hall OUT: GPIO19 mit Pull‑Up (intern/extern).</text>
+  <text x="20" y="248" class="legend">• Pololu S13V20F5 reicht meist, für harte LTE‑Peaks ggf. 5V/3A Buck verwenden.</text>
+  <text x="20" y="253" class="legend">• Kabel kurz und sternförmig führen, besonders 5V/GND zum HAT. Gemeinsame Masse zwingend.</text>
+  <text x="20" y="258" class="legend">• Polarität prüfen (5V/3V3), Servo V+ nie an 3V3!</text>
+  <text x="20" y="263" class="legend">• SIM Antennen korrekt anschließen; außerhalb von Metallgehäusen testen.</text>
+
+  <!-- Footer -->
+  <text x="105" y="288" class="label" text-anchor="middle">Stand: 2025‑10‑13 | Dateiname: WIRING_ESP32_SIM7600A_A4.svg</text>
+</svg>

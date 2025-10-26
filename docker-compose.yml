@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: parking_backend
+    # Persist DB to local file so SQLite survives container restarts
+    volumes:
+      - ./backend/parking.db:/app/parking.db
+    environment:
+      # backend/server_gashis.py computes DATABASE_PATH relative to module file; keep port 8000
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: parking_frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+# Named volumes not used for SQLite in this simple setup

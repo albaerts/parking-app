@@ -1,0 +1,5 @@
+RewriteEngine On
+
+# API Routes - leite alle API Calls an api.php weiter
+RewriteCond %{REQUEST_URI} ^/api/(.*)$
+RewriteRule ^api/(.*)$ api/api.php [QSA,L]

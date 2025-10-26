@@ -1,0 +1,32 @@
+# Raspberry Pi Requirements für Smart Parking Barrier
+# Installation: pip3 install -r requirements.txt
+
+# GPIO Control für Raspberry Pi
+RPi.GPIO==0.7.1
+
+# HTTP Requests für API-Kommunikation  
+requests==2.31.0
+
+# JSON Handling (Standard Library, aber für Klarheit)
+# json (built-in)
+
+# Threading für parallele Ausführung
+# threading (built-in)
+
+# Subprocess für System-Befehle
+# subprocess (built-in)
+
+# Logging
+# logging (built-in)
+
+# Time & DateTime
+# time (built-in)
+# datetime (built-in)
+
+# Typing Hints
+# typing (built-in)
+
+# Optional: Für erweiterte Features
+# pyserial==3.5          # Falls später serielle Kommunikation
+# psutil==5.9.5          # Für System-Monitoring
+# schedule==1.2.0        # Für Task-Scheduling

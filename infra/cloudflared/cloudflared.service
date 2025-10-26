@@ -1,0 +1,19 @@
+# systemd unit for Cloudflare Tunnel
+# Install:
+#   sudo cp cloudflared.service /etc/systemd/system/cloudflared.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now cloudflared
+# Requires config at /etc/cloudflared/config.yml and credentials json
+
+[Unit]
+Description=cloudflared Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Restart=on-failure
+User=root
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate tunnel run smart-parking
+
+[Install]
+WantedBy=multi-user.target

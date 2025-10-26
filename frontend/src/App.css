@@ -1,0 +1,331 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet Map Fixes */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  z-index: 1 !important;
+}
+
+.leaflet-control-container {
+  z-index: 1000 !important;
+}
+
+/* Ensure map tiles load properly */
+.leaflet-tile-pane {
+  z-index: 2 !important;
+}
+
+.leaflet-overlay-pane {
+  z-index: 4 !important;
+}
+
+.leaflet-marker-pane {
+  z-index: 6 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 7 !important;
+}
+
+/* Fix for map container positioning */
+.map-container {
+  position: relative !important;
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Loading animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom button styles */
+.btn-primary {
+  @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition duration-200;
+}
+
+.btn-success {
+  @apply bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition duration-200;
+}
+
+.btn-danger {
+  @apply bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-200;
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-lg shadow-md p-6;
+}
+
+.card-header {
+  @apply border-b border-gray-200 pb-4 mb-4;
+}
+
+/* Status indicators */
+.status-available {
+  @apply bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-occupied {
+  @apply bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-pending {
+  @apply bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium;
+}
+
+/* Map container styles */
+.map-container {
+  @apply bg-gray-100 rounded-lg h-full flex items-center justify-center border-2 border-dashed border-gray-300;
+}
+
+/* Form styles */
+.form-input {
+  @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 mb-2;
+}
+
+/* Modal styles */
+.modal-overlay {
+  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+}
+
+.modal-content {
+  @apply bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-96 overflow-y-auto;
+}
+
+/* Responsive grid */
+.parking-grid {
+  @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+}
+
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Hover effects */
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Success/Error message styles */
+.alert-success {
+  @apply bg-green-50 border-l-4 border-green-400 p-4 rounded-r;
+}
+
+.alert-error {
+  @apply bg-red-50 border-l-4 border-red-400 p-4 rounded-r;
+}
+
+.alert-warning {
+  @apply bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r;
+}
+
+.alert-info {
+  @apply bg-blue-50 border-l-4 border-blue-400 p-4 rounded-r;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-b-2 border-blue-600;
+}
+
+/* Badge styles */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-primary {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-danger {
+  @apply bg-red-100 text-red-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+/* Custom focus styles */
+.focus-ring:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+}
+
+/* Parking spot card specific styles */
+.parking-spot-card {
+  @apply bg-white rounded-lg shadow-md p-4 border-l-4 transition-all duration-200 hover:shadow-lg;
+}
+
+.parking-spot-card.available {
+  @apply border-green-400;
+}
+
+.parking-spot-card.occupied {
+  @apply border-red-400;
+}
+
+/* Owner dashboard specific styles */
+.owner-stats {
+  @apply grid grid-cols-1 md:grid-cols-3 gap-6 mb-8;
+}
+
+.stat-card {
+  @apply bg-white rounded-lg shadow-md p-6 text-center;
+}
+
+.stat-number {
+  @apply text-3xl font-bold text-blue-600 mb-2;
+}
+
+.stat-label {
+  @apply text-gray-600 text-sm;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .modal-content {
+    @apply max-w-xs;
+  }
+  
+  .parking-grid {
+    @apply grid-cols-1;
+  }
+  
+  .owner-stats {
+    @apply grid-cols-1;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Additional Leaflet positioning fixes for user interface */
+.bg-white.rounded-lg.shadow-md {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Ensure map container takes proper space */
+.leaflet-container {
+  border-radius: 0.5rem !important;
+  flex: 1 !important;
+}
+
+/* Fix any potential positioning conflicts */
+.map-container {
+  border-radius: 0.5rem !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+}

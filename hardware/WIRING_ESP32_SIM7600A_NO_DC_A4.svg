@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">
+  <title>Smart Parking – No‑DC Wiring (A4)</title>
+  <style>
+    .title{font:700 8px sans-serif}
+    .label{font:600 4px sans-serif}
+    .small{font:400 3px sans-serif}
+    .box{fill:#f9f9f9;stroke:#222;stroke-width:0.5}
+    .dash{fill:none;stroke:#888;stroke-dasharray:2 2;stroke-width:0.4}
+    .pwr{stroke:#d22;stroke-width:1.2;fill:none}
+    .gnd{stroke:#111;stroke-width:1.2;fill:none}
+    .sig{stroke:#1e88e5;stroke-width:0.8;fill:none}
+    .servo{stroke:#ff6f00;stroke-width:0.8;fill:none}
+    .hall{stroke:#2e7d32;stroke-width:0.8;fill:none}
+  </style>
+
+  <text x="10" y="12" class="title">Smart Parking – Verkabelung Variante A (ohne DC‑Stecker) – A4</text>
+  <text x="10" y="18" class="small">Powerbank → USB‑C PD‑Trigger (5 V/3 A) → WAGO 221‑415 (+5 V/GND) → SIM7600 HAT, ESP32, Servo, Hall</text>
+
+  <!-- Powerbank -->
+  <rect x="10" y="30" width="40" height="20" rx="2" class="box"/>
+  <text x="12" y="42" class="label">Powerbank</text>
+  <text x="12" y="47" class="small">USB‑C PD (≥18 W)</text>
+
+  <!-- PD Trigger -->
+  <rect x="60" y="30" width="50" height="20" rx="2" class="box"/>
+  <text x="62" y="42" class="label">USB‑C PD‑Trigger</text>
+  <text x="62" y="47" class="small">Ausgang: +5 V / GND</text>
+
+  <!-- Cable from PB to Trigger -->
+  <line x1="50" y1="40" x2="60" y2="40" class="dash"/>
+  <text x="48" y="36" class="small">USB‑C</text>
+
+  <!-- WAGO buses -->
+  <rect x="125" y="25" width="70" height="18" rx="2" class="box"/>
+  <text x="128" y="35" class="label">+5 V Bus (WAGO 221‑415)</text>
+  <rect x="125" y="50" width="70" height="18" rx="2" class="box"/>
+  <text x="128" y="60" class="label">GND Bus (WAGO 221‑415)</text>
+
+  <!-- Power lines from Trigger to WAGOs -->
+  <line x1="110" y1="36" x2="125" y2="34" class="pwr"/>
+  <line x1="110" y1="44" x2="125" y2="58" class="gnd"/>
+  <text x="100" y="34" class="small">+5 V →</text>
+  <text x="100" y="58" class="small">GND →</text>
+
+  <!-- ESP32 box -->
+  <rect x="20" y="95" width="50" height="28" rx="2" class="box"/>
+  <text x="22" y="107" class="label">ESP32 DevKit</text>
+  <text x="22" y="112" class="small">VIN, GND, GPIO18 (Servo),</text>
+  <text x="22" y="116" class="small">GPIO19 (Hall), RX2=16, TX2=17</text>
+
+  <!-- SIM7600 HAT box -->
+  <rect x="85" y="90" width="55" height="28" rx="2" class="box"/>
+  <text x="87" y="102" class="label">SIM7600 HAT (A, UART)</text>
+  <text x="87" y="107" class="small">VCC 5 V, GND</text>
+  <text x="87" y="111" class="small">TX→GPIO16, RX→GPIO17</text>
+
+  <!-- Servo box -->
+  <rect x="155" y="90" width="45" height="22" rx="2" class="box"/>
+  <text x="157" y="102" class="label">Servo SG90</text>
+  <text x="157" y="107" class="small">Rot 5 V, Braun GND,</text>
+  <text x="157" y="111" class="small">Signal → GPIO18</text>
+
+  <!-- Hall sensor box -->
+  <rect x="155" y="120" width="45" height="22" rx="2" class="box"/>
+  <text x="157" y="132" class="label">Hall A3144</text>
+  <text x="157" y="137" class="small">VCC 3.3 V, GND, OUT→19</text>
+
+  <!-- Power distribution lines to modules -->
+  <line x1="160" y1="34" x2="160" y2="90" class="pwr"/> <!-- +5V to Servo -->
+  <line x1="160" y1="58" x2="160" y2="112" class="gnd"/> <!-- GND to Servo/Hall -->
+  <line x1="135" y1="34" x2="112" y2="90" class="pwr"/> <!-- +5V to HAT -->
+  <line x1="135" y1="58" x2="112" y2="118" class="gnd"/> <!-- GND to HAT -->
+  <line x1="135" y1="34" x2="45" y2="95" class="pwr"/>  <!-- +5V to ESP32 VIN -->
+  <line x1="135" y1="58" x2="45" y2="123" class="gnd"/>  <!-- GND to ESP32 -->
+
+  <!-- Signal lines -->
+  <line x1="70" y1="105" x2="85" y2="105" class="sig"/>
+  <text x="68" y="101" class="small">TX2 17 → RX</text>
+  <line x1="70" y1="110" x2="85" y2="110" class="sig"/>
+  <text x="68" y="116" class="small">RX2 16 ← TX</text>
+
+  <line x1="70" y1="115" x2="155" y2="98" class="servo"/>
+  <text x="105" y="96" class="small">GPIO18 (Servo)</text>
+
+  <line x1="70" y1="120" x2="155" y2="131" class="hall"/>
+  <text x="100" y="128" class="small">GPIO19 (Hall OUT)</text>
+
+  <!-- 3.3V from ESP32 to Hall -->
+  <line x1="45" y1="112" x2="155" y2="125" class="sig"/>
+  <text x="85" y="121" class="small">3.3 V zu Hall VCC</text>
+
+  <!-- Optional capacitors -->
+  <circle cx="108" cy="88" r="3" fill="none" stroke="#555" stroke-width="0.5"/>
+  <text x="113" y="89" class="small">1000 µF</text>
+  <circle cx="178" cy="88" r="3" fill="none" stroke="#555" stroke-width="0.5"/>
+  <text x="183" y="89" class="small">470 µF</text>
+
+  <!-- Legend -->
+  <rect x="10" y="155" width="190" height="35" rx="2" class="box"/>
+  <text x="12" y="164" class="label">Legende & Hinweise</text>
+  <text x="12" y="170" class="small"><tspan fill="#d22">Rot</tspan>: +5 V  |  <tspan fill="#111">Schwarz</tspan>: GND  |  <tspan fill="#1e88e5">Blau</tspan>: Signale (UART/3.3 V)  |  <tspan fill="#ff6f00">Orange</tspan>: Servo  |  <tspan fill="#2e7d32">Grün</tspan>: Hall OUT</text>
+  <text x="12" y="176" class="small">- Gemeinsame Masse zwingend. Servo niemals an 3.3 V. Leitungen kurz, ausreichender Querschnitt (0.5–1.0 mm²).</text>
+  <text x="12" y="182" class="small">- Optional: 1000 µF nahe HAT, 330–470 µF nahe Servo + je 100 nF Keramik. Stripplänge ~11 mm für WAGO 221.</text>
+  <text x="12" y="188" class="small">- SIM7600 HAT: UART TX→GPIO16 (ESP32 RX2), RX←GPIO17 (ESP32 TX2). Antennen korrekt anschließen.</text>
+</svg>

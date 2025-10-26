@@ -1,0 +1,18 @@
+DirectoryIndex index.html
+Options +FollowSymLinks
+RewriteEngine On
+
+# Erlaubt alle Dateien
+<Files "*">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# API Routes  
+RewriteCond %{REQUEST_URI} ^/parking/api/(.*)$
+RewriteRule ^api/(.*)$ api.php [QSA,L]
+
+# Frontend Routes - für React Router
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.html [QSA,L]

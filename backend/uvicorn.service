@@ -1,0 +1,25 @@
+# systemd Service für Uvicorn (FastAPI)
+# Installation:
+#   sudo cp backend/uvicorn.service /etc/systemd/system/uvicorn.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now uvicorn
+#
+# Passe WorkingDirectory und Environment an deine Pfade/Umgebung an.
+
+[Unit]
+Description=Uvicorn FastAPI Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/parking-app/backend
+# Optional: venv aktivieren
+# Environment="PATH=/opt/parking-app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/usr/bin/env uvicorn backend.server:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+*.sqlite3
+*.db
+backend/parking.db
+
+# Node
+node_modules/
+build/
+dist/
+frontend/build/
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.local
+secrets.env
+
+# Logs
+*.log

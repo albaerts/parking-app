@@ -5,7 +5,8 @@ services:
     image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-yourorg}/parking-backend:${IMAGE_TAG:-latest}
     container_name: parking_backend
     volumes:
-      - ./backend/parking.db:/app/parking.db
+      # mount the whole backend dir so the container user can create sqlite journal files
+      - ./backend:/app/backend
     environment:
       - PYTHONUNBUFFERED=1
     ports:

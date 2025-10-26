@@ -2,6 +2,9 @@
 # backup_db.sh [dest_dir]
 set -euo pipefail
 set -euo pipefail
+#!/usr/bin/env bash
+# backup_db.sh [dest_dir]
+set -euo pipefail
 
 DEST_DIR=${1:-$(dirname "$0")/backups}
 SRC_DB=./backend/parking.db

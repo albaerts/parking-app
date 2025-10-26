@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 # check_health.sh <URL> [max_attempts] [sleep_seconds]
 set -euo pipefail
-URL=${1:-http://127.0.0.1:8000/health}
-MAX_ATTEMPTS=${2:-10}
-SLEEP=${3:-2}
-#!/usr/bin/env bash
-# check_health.sh <URL> [max_attempts] [sleep_seconds]
-set -euo pipefail
 
 URL=${1:-http://127.0.0.1:8000/health}
 MAX_ATTEMPTS=${2:-10}

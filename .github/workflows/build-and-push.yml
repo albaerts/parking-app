@@ -48,3 +48,32 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/parking-frontend:latest
             ghcr.io/${{ github.repository_owner }}/parking-frontend:${{ github.sha }}
           platforms: linux/amd64
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd /var/www/parkingsrv || exit 1
+            # If a GHCR token is provided, login so docker pull can authenticate (optional)
+            if [ -n "${DEPLOY_GHCR_TOKEN:-}" ]; then
+              echo "Logging into ghcr.io"
+              echo "${DEPLOY_GHCR_TOKEN}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin || true
+            fi
+            echo "Fetching latest repo and running deploy/update.sh"
+            git fetch origin || true
+            git reset --hard origin/main || true
+            ./deploy/update.sh latest || true
+        env:
+          DEPLOY_GHCR_TOKEN: ${{ secrets.DEPLOY_GHCR_TOKEN }}

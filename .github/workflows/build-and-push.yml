@@ -53,8 +53,8 @@ jobs:
     name: Deploy to VPS
     needs: build-and-push
     runs-on: ubuntu-latest
-  # Run deploy on main and the deploy/fix-db-nginx branch
-  if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/fix-db-nginx'
+    # Run deploy on main and the deploy/fix-db-nginx branch
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/fix-db-nginx' }}
 
     steps:
       - name: Deploy via SSH to VPS

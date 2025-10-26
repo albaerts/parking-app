@@ -106,16 +106,31 @@ jobs:
             chmod +x ./deploy/update.sh || true
             ./deploy/update.sh ${{ env.IMAGE_TAG }}
 
-            # Optional public post-deploy sanity check (requires curl on the server)
+            # Optional public post-deploy sanity check (requires curl on the server).
+            # Follow redirects and validate the root page contains our SPA title so
+            # we don't get false negatives from redirects.
             if command -v curl >/dev/null 2>&1; then
-              echo "Running public site sanity check..."
-              HTTP=$(curl -s -o /dev/null -w "%{http_code}" "https://parking.gashis.ch/parking/" || echo "000")
+              echo "Running public site sanity check (follow redirects and validate content)..."
+              TMPFILE=$(mktemp)
+              HTTP=$(curl -sL -w "%{http_code}" -o "$TMPFILE" "https://parking.gashis.ch/" || echo "000")
               echo "public_site_status=$HTTP"
-              # Accept 200 OK or 301 redirect (we redirect /parking -> /)
-              if [ "$HTTP" != "200" ] && [ "$HTTP" != "301" ]; then
+              if [ "$HTTP" = "200" ]; then
+                # Validate the expected title exists in the HTML
+                if grep -q "ParkingApp | Smart Parking Solutions" "$TMPFILE"; then
+                  echo "Public site content check passed"
+                else
+                  echo "Public site content check FAILED - expected title not found" >&2
+                  echo "Dumping first 200 bytes of response:" >&2
+                  head -c 200 "$TMPFILE" >&2 || true
+                  rm -f "$TMPFILE"
+                  exit 4
+                fi
+              else
                 echo "Public site check failed (status=$HTTP)" >&2
+                rm -f "$TMPFILE"
                 exit 3
               fi
+              rm -f "$TMPFILE"
             else
               echo "curl not available on remote host — skipping public site check"
             fi

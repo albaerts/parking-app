@@ -90,6 +90,18 @@ jobs:
               echo "No GHCR_PAT secret found — skipping docker login on remote host"
             fi
 
+            # Ensure the checked-out repo on the remote is up-to-date so changes
+            # committed to files like deploy/nginx.conf are present before we run
+            # the deploy helper. This is a safe, non-fatal update: if git isn't
+            # present or the repo has diverged, we continue but log the output.
+            if [ -d .git ]; then
+              echo "Updating remote checkout to origin/main"
+              git fetch --all --prune || true
+              git reset --hard origin/main || true
+            else
+              echo "No .git directory found at ${{ secrets.REMOTE_PATH }} - skipping git update"
+            fi
+
             # Ensure deploy script is executable and run it
             chmod +x ./deploy/update.sh || true
             ./deploy/update.sh ${{ env.IMAGE_TAG }}

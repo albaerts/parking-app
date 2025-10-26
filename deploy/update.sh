@@ -15,16 +15,22 @@ export IMAGE_TAG
 export REPO_OWNER=${REPO_OWNER:-albaerts}
 export REGISTRY=${REGISTRY:-ghcr.io}
 
+# Make helper scripts executable if present (helps when git doesn't preserve mode)
+chmod +x ./deploy/*.sh >/dev/null 2>&1 || true
+
 # Pull images
 echo "Pulling backend image: ${REGISTRY}/${REPO_OWNER}/parking-backend:${IMAGE_TAG}"
 docker pull ${REGISTRY}/${REPO_OWNER}/parking-backend:${IMAGE_TAG}
 
 		# Backup DB before pulling new images
-		if [ -x ./deploy/backup_db.sh ]; then
-			echo "Backing up database before deploy..."
+		if [ -x ./deploy/backup_db_fixed.sh ]; then
+			echo "Backing up database before deploy (deploy/backup_db_fixed.sh)..."
+			./deploy/backup_db_fixed.sh ./deploy/backups || echo "Backup script failed, continuing deploy"
+		elif [ -x ./deploy/backup_db.sh ]; then
+			echo "Backing up database before deploy (deploy/backup_db.sh)..."
 			./deploy/backup_db.sh ./deploy/backups || echo "Backup script failed, continuing deploy"
 		else
-			echo "No backup script found at ./deploy/backup_db.sh - skipping DB backup"
+			echo "No backup script found at ./deploy/backup_db*.sh - skipping DB backup"
 		fi
 
 echo "Pulling frontend image: ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}"
@@ -36,8 +42,16 @@ docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate
 echo "Deploy finished."
 
 # After deploy: run healthcheck
-if [ -x ./deploy/check_health.sh ]; then
-	echo "Running post-deploy health check..."
+if [ -x ./deploy/check_health_fixed.sh ]; then
+	echo "Running post-deploy health check (deploy/check_health_fixed.sh)..."
+	if ./deploy/check_health_fixed.sh "http://127.0.0.1:8000/health" 15 2; then
+		echo "Health check passed"
+	else
+		echo "Health check FAILED. Please check logs and consider rollback." >&2
+		exit 2
+	fi
+elif [ -x ./deploy/check_health.sh ]; then
+	echo "Running post-deploy health check (deploy/check_health.sh)..."
 	if ./deploy/check_health.sh "http://127.0.0.1:8000/health" 15 2; then
 		echo "Health check passed"
 	else
@@ -45,5 +59,5 @@ if [ -x ./deploy/check_health.sh ]; then
 		exit 2
 	fi
 else
-	echo "No health check script found at ./deploy/check_health.sh - skipping health check"
+	echo "No health check script found - skipping health check"
 fi

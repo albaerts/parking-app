@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# backup_db.sh [dest_dir]
-set -euo pipefail
+# backup_db_fixed.sh [dest_dir]
 set -euo pipefail
 
 DEST_DIR=${1:-$(dirname "$0")/backups}

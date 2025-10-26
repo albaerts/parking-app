@@ -74,8 +74,17 @@ jobs:
             fi
             echo "Fetching latest repo and running deploy/update.sh"
             git fetch origin || true
-            # Reset to the branch that triggered the workflow (e.g. main or deploy/fix-db-nginx)
-            git reset --hard origin/${{ github.ref_name }} || true
+            # Create a lightweight backup of the current HEAD (for investigation/rollback if needed)
+            git branch -f backup-before-deploy-$(date +%s) || true
+
+            # Create/force-update a local deploy branch that mirrors the triggering remote branch
+            BRANCH_NAME='${{ github.ref_name }}'
+            echo "Resetting to origin/$BRANCH_NAME (local deploy-$BRANCH_NAME branch)"
+            git checkout -B deploy-$BRANCH_NAME origin/$BRANCH_NAME || true
+
+            # Show current branch and latest commit for logs
+            git rev-parse --abbrev-ref HEAD || true
+            git log -n 1 --pretty=oneline || true
             ./deploy/update.sh latest || true
         env:
           DEPLOY_GHCR_TOKEN: ${{ secrets.DEPLOY_GHCR_TOKEN }}

@@ -11,7 +11,8 @@ echo "Deploying images with tag: ${IMAGE_TAG} using compose file ${COMPOSE_FILE}
 
 # Export variables so docker-compose file can use them
 export IMAGE_TAG
-export REPO_OWNER=${REPO_OWNER:-yourorg}
+# default to your GitHub owner to make local deploys simpler
+export REPO_OWNER=${REPO_OWNER:-albaerts}
 export REGISTRY=${REGISTRY:-ghcr.io}
 
 # Pull images

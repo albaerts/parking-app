@@ -608,13 +608,10 @@ async def create_user(user: User):
         user_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        
-        user.id = user_id        sudo -u deploy -i
-        cd /var/www/parkingsrv
-        git clone <dein-repo-url> .   # oder git pull falls schon vorhanden
-        chmod +x deploy/*.sh
+
+        user.id = user_id
         return user
-        
+
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="User with this email already exists")
     except sqlite3.Error as e:

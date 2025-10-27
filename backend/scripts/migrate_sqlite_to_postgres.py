@@ -1,83 +1,131 @@
-"""Migrate users from SQLite to Postgres (idempotent)
-
-This script migrates the `users` table from the local SQLite file to the
-Postgres database referenced by the `DATABASE_URL` environment variable.
-It is purposely conservative: it only migrates the `users` table, uses
-email as the unique key, and performs upserts to avoid duplicates.
-
-Run inside backend container where /app/backend/parking.db exists and
-requirements (sqlalchemy, psycopg2) are available.
+#!/usr/bin/env python3
 """
+Safe migration script copying selected tables from the local SQLite file to Postgres.
+Runs inside the backend container where requirements are installed.
 
+Usage (inside container):
+  python3 backend/scripts/migrate_sqlite_to_postgres.py
+
+It reads DATABASE_URL from env and uses /app/backend/parking.db as SQLite source.
+It performs idempotent upserts (ON CONFLICT DO NOTHING) for tables with unique keys.
+"""
 import os
-import sys
-from datetime import datetime
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, DateTime, select, insert, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+import sqlite3
+from urllib.parse import urlparse
+import sqlalchemy as sa
+from sqlalchemy import text
 
-SQLITE_PATH = os.environ.get("SQLITE_PATH", "/app/backend/parking.db")
-DATABASE_URL = os.environ.get("DATABASE_URL")
+SQLITE_PATH = '/app/backend/parking.db'
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
 if not DATABASE_URL:
-    print("ERROR: DATABASE_URL not set")
-    sys.exit(2)
+    raise SystemExit('DATABASE_URL is not set')
 
-print("SOURCE SQLITE:", SQLITE_PATH)
-print("TARGET DB:", DATABASE_URL)
+engine = sa.create_engine(DATABASE_URL)
 
-# Create engines
-src_engine = create_engine(f"sqlite:///{SQLITE_PATH}")
-# ensure we use postgres dialect
-tgt_engine = create_engine(DATABASE_URL)
-
-src_meta = MetaData()
-src_meta.reflect(bind=src_engine)
-
-if 'users' not in src_meta.tables:
-    print('No users table found in sqlite — nothing to migrate')
-    sys.exit(0)
-
-users_src = src_meta.tables['users']
-
-# Ensure target users table exists (Alembic should have created it). Reflect target metadata.
-tgt_meta = MetaData()
-tgt_meta.reflect(bind=tgt_engine)
-
-if 'users' not in tgt_meta.tables:
-    print('Target users table does not exist — aborting. Run alembic upgrade head first')
-    sys.exit(3)
-
-users_tgt = tgt_meta.tables['users']
-
-# Read rows from sqlite
-with src_engine.connect() as s_conn:
-    rows = s_conn.execute(select(users_src)).fetchall()
-
-print(f"Found {len(rows)} rows in sqlite.users")
-
-migrated = 0
-skipped = 0
-
-with tgt_engine.begin() as t_conn:
+def copy_users(conn_sqlite, pg_conn):
+    cur = conn_sqlite.cursor()
+    cur.execute('SELECT id, email, name, password_hash, role, created_at, last_login FROM users')
+    rows = cur.fetchall()
+    inserted = 0
     for r in rows:
-        # Build a dict of columns present in source row and match to target columns
-        rowd = dict(r._mapping)
-        # Normalize keys: ensure only keys that exist in target are used
-        insert_data = {k: rowd.get(k) for k in users_tgt.c.keys() if k in rowd}
-        # If id present, do not force id in inserts — prefer upsert by email
-        if 'email' not in insert_data or not insert_data.get('email'):
-            print('Skipping row without email:', rowd)
-            skipped += 1
-            continue
+        id_, email, name, password_hash, role, created_at, last_login = r
+        # Upsert by email
+        stmt = text(
+            """
+            INSERT INTO users (id, email, name, password_hash, role, created_at, last_login)
+            VALUES (:id, :email, :name, :password_hash, :role, :created_at, :last_login)
+            ON CONFLICT (email) DO UPDATE SET
+              name = EXCLUDED.name,
+              password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
+              role = COALESCE(EXCLUDED.role, users.role),
+              last_login = COALESCE(EXCLUDED.last_login, users.last_login)
+            """
+        )
+        pg_conn.execute(stmt, dict(id=id_, email=email, name=name, password_hash=password_hash, role=role, created_at=created_at, last_login=last_login))
+        inserted += 1
+    return inserted
 
-        stmt = pg_insert(users_tgt).values(**insert_data)
-        # ON CONFLICT (email) DO UPDATE SET ... (update password_hash, role, last_login, name)
-        do_update = {c.name: stmt.excluded[c.name] for c in users_tgt.c if c.name not in ('id','email','created_at')}
-        stmt = stmt.on_conflict_do_update(index_elements=['email'], set_=do_update)
-        try:
-            t_conn.execute(stmt)
-            migrated += 1
-        except Exception as e:
-            print('ERROR migrating', insert_data.get('email'), '->', e)
+def copy_parking_spots(conn_sqlite, pg_conn):
+    cur = conn_sqlite.cursor()
+    cur.execute('SELECT id, name, address, latitude, longitude, status, price_per_hour, created_at FROM parking_spots')
+    rows = cur.fetchall()
+    inserted = 0
+    for r in rows:
+        id_, name, address, lat, lon, status, price, created_at = r
+        stmt = text(
+            """
+            INSERT INTO parking_spots (id, name, address, latitude, longitude, status, price_per_hour, created_at)
+            VALUES (:id, :name, :address, :latitude, :longitude, :status, :price_per_hour, :created_at)
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+        pg_conn.execute(stmt, dict(id=id_, name=name, address=address, latitude=lat, longitude=lon, status=status, price_per_hour=price, created_at=created_at))
+        inserted += 1
+    return inserted
 
-print(f"Migrated/Upserted: {migrated}, Skipped: {skipped}")
-print('Done')
+def copy_hardware_devices(conn_sqlite, pg_conn):
+    cur = conn_sqlite.cursor()
+    cur.execute('SELECT id, hardware_id, owner_email, parking_spot_id, created_at FROM hardware_devices')
+    rows = cur.fetchall()
+    inserted = 0
+    for r in rows:
+        id_, hardware_id, owner_email, parking_spot_id, created_at = r
+        stmt = text(
+            """
+            INSERT INTO hardware_devices (id, hardware_id, owner_email, parking_spot_id, created_at)
+            VALUES (:id, :hardware_id, :owner_email, :parking_spot_id, :created_at)
+            ON CONFLICT (hardware_id) DO UPDATE SET
+              owner_email = COALESCE(EXCLUDED.owner_email, hardware_devices.owner_email),
+              parking_spot_id = COALESCE(EXCLUDED.parking_spot_id, hardware_devices.parking_spot_id)
+            """
+        )
+        pg_conn.execute(stmt, dict(id=id_, hardware_id=hardware_id, owner_email=owner_email, parking_spot_id=parking_spot_id, created_at=created_at))
+        inserted += 1
+    return inserted
+
+def copy_hardware_commands(conn_sqlite, pg_conn):
+    cur = conn_sqlite.cursor()
+    cur.execute('SELECT id, hardware_id, command, parameters, status, issued_by, created_at, claimed_at, executed_at FROM hardware_commands')
+    rows = cur.fetchall()
+    inserted = 0
+    for r in rows:
+        id_, hardware_id, command, parameters, status, issued_by, created_at, claimed_at, executed_at = r
+        stmt = text(
+            """
+            INSERT INTO hardware_commands (id, hardware_id, command, parameters, status, issued_by, created_at, claimed_at, executed_at)
+            VALUES (:id, :hardware_id, :command, :parameters, :status, :issued_by, :created_at, :claimed_at, :executed_at)
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+        pg_conn.execute(stmt, dict(id=id_, hardware_id=hardware_id, command=command, parameters=parameters, status=status, issued_by=issued_by, created_at=created_at, claimed_at=claimed_at, executed_at=executed_at))
+        inserted += 1
+    return inserted
+
+def main():
+    if not os.path.exists(SQLITE_PATH):
+        print('SQLite source not found at', SQLITE_PATH)
+        return
+    print('Connecting to SQLite:', SQLITE_PATH)
+    conn_sqlite = sqlite3.connect(SQLITE_PATH)
+
+    print('Connecting to Postgres via', DATABASE_URL)
+    with engine.begin() as pg_conn:
+        print('Copying users...')
+        u = copy_users(conn_sqlite, pg_conn)
+        print('Copied users:', u)
+        print('Copying parking_spots...')
+        p = copy_parking_spots(conn_sqlite, pg_conn)
+        print('Copied parking_spots:', p)
+        print('Copying hardware_devices...')
+        h = copy_hardware_devices(conn_sqlite, pg_conn)
+        print('Copied hardware_devices:', h)
+        print('Copying hardware_commands...')
+        c = copy_hardware_commands(conn_sqlite, pg_conn)
+        print('Copied hardware_commands:', c)
+
+    conn_sqlite.close()
+    print('Migration complete')
+
+if __name__ == '__main__':
+    main()

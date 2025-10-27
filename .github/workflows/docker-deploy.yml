@@ -106,6 +106,17 @@ jobs:
             chmod +x ./deploy/update.sh || true
             ./deploy/update.sh ${{ env.IMAGE_TAG }}
 
+            # Ensure database migrations run after update (idempotent). This
+            # calls the repository's migrate helper which prefers Alembic and
+            # falls back to SQLAlchemy create_all and sequence resets.
+            if [ -f ./deploy/migrate_db.sh ]; then
+              chmod +x ./deploy/migrate_db.sh || true
+              echo "Running post-deploy DB migration script..."
+              ./deploy/migrate_db.sh || true
+            else
+              echo "No deploy/migrate_db.sh found - skipping post-deploy migration"
+            fi
+
             # Optional public post-deploy sanity check (requires curl on the server).
             # Follow redirects and validate the root page contains our SPA title so
             # we don't get false negatives from redirects.

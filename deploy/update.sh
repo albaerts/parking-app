@@ -36,6 +36,14 @@ docker pull ${REGISTRY}/${REPO_OWNER}/parking-backend:${IMAGE_TAG}
 echo "Pulling frontend image: ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}"
 docker pull ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}
 
+# Run DB migrations if present (safe, idempotent)
+if [ -x ./deploy/migrate_db.sh ]; then
+	echo "Running DB migration: ./deploy/migrate_db.sh"
+	./deploy/migrate_db.sh || echo "Migration script failed (continuing)"
+else
+	echo "No migrate_db.sh found or not executable - skipping migrations"
+fi
+
 # Ensure any previous stack is stopped/removed to avoid container rename conflicts
 echo "Stopping any existing compose stack (safe): docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true"
 docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true

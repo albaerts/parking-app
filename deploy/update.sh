@@ -46,8 +46,13 @@ if docker-compose -f ${COMPOSE_FILE} config --services | grep -q '^backend$'; th
 		echo "Alembic migrations applied inside container"
 	else
 		echo "Alembic inside container failed — trying SQLAlchemy create_all inside container"
-		if docker-compose -f ${COMPOSE_FILE} run --rm backend python3 -c "import auth; auth.init_db()"; then
-			echo "create_all executed inside container"
+		# Attempt a safe in-container schema patch: add missing columns to existing SQLite users table
+		if docker-compose -f ${COMPOSE_FILE} run --rm backend python3 -c "import sqlite3,sys; p='/app/backend/parking.db'; conn=sqlite3.connect(p); c=conn.cursor(); cols=[r[1] for r in c.execute('PRAGMA table_info(users)')];\
+\
+if 'password_hash' not in cols: c.execute(\"ALTER TABLE users ADD COLUMN password_hash TEXT\");\
+if 'role' not in cols: c.execute(\"ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'\");\
+if 'last_login' not in cols: c.execute(\"ALTER TABLE users ADD COLUMN last_login TIMESTAMP\"); conn.commit(); conn.close(); print('patched users table')"; then
+			echo "in-container users table patched (columns added if missing)"
 		else
 			echo "Container-based migrations failed — falling back to host migrate script if present"
 			if [ -x ./deploy/migrate_db.sh ]; then

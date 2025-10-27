@@ -40,6 +40,33 @@ docker pull ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}
 echo "Stopping any existing compose stack (safe): docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true"
 docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true
 
+# Compose creates a default network named <project>_default when no explicit
+# network name is provided. In some environments duplicate networks with the
+# same name can accumulate and make docker-compose fail with "network ... is
+# ambiguous". Detect and remove duplicate networks for the current project
+# before attempting to bring the stack up.
+PROJECT_NAME=${COMPOSE_PROJECT_NAME:-$(basename "$(pwd)")}
+NETWORK_NAME="${PROJECT_NAME}_default"
+echo "Checking for duplicate networks named: ${NETWORK_NAME}"
+net_ids=$(docker network ls --filter name="${NETWORK_NAME}" -q || true)
+if [ -n "${net_ids}" ]; then
+	# Count matching ids
+	count=0
+	for id in ${net_ids}; do
+		count=$((count+1))
+	done
+	if [ "${count}" -gt 1 ]; then
+		echo "Found ${count} networks named ${NETWORK_NAME} - removing duplicates"
+		for id in ${net_ids}; do
+			echo "Removing network id: ${id}"
+			docker network rm "${id}" || true
+		done
+		echo "Duplicate networks removed"
+	else
+		echo "No duplicate networks found (count=${count})"
+	fi
+fi
+
 # Recreate stack (with a safe retry if a rename/conflict error occurs)
 echo "Starting compose stack: docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate"
 if docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then

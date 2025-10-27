@@ -6,6 +6,7 @@ import sqlite3
 import json
 import os
 from datetime import datetime
+import auth
 
 # FastAPI App für gashis.ch
 app = FastAPI(
@@ -115,6 +116,12 @@ def init_database():
 
 # Initialize database on startup
 init_database()
+# Initialize auth DB (SQLAlchemy models)
+try:
+    auth.init_db()
+except Exception:
+    # If SQLAlchemy or DB libs are not installed yet, init_db will fail during dev; ignore for now
+    pass
 
 # Pydantic Models
 class ParkingSpot(BaseModel):
@@ -246,45 +253,60 @@ async def login_local(payload: LoginRequest):
     - owner@test.com / owner123
     - admin@test.com / admin123
     """
-    user = TEST_USERS.get(payload.email)
-    if not user or user["password"] != payload.password:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    # Prefer persistent DB authentication (SQLAlchemy). Fallback to in-code TEST_USERS for dev.
+    db = auth.SessionLocal()
+    try:
+        real_user = auth.authenticate_user(db, payload.email, payload.password)
+        if real_user:
+            token = auth.create_access_token(real_user.email, real_user.id, real_user.role)
+            # update last_login
+            real_user.last_login = datetime.utcnow()
+            db.add(real_user)
+            db.commit()
+            return {
+                "token": token,
+                "user": {"id": real_user.id, "email": real_user.email, "name": real_user.name, "role": real_user.role},
+            }
 
-    # Dummy-Token (nur lokal!)
-    token = f"dev-token-{user['role']}"
+        # Fallback to test users for legacy/dev convenience
+        user = TEST_USERS.get(payload.email)
+        if not user or user["password"] != payload.password:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    # Response-Form an das bestehende Frontend angepasst
-    return {
-        "token": token,
-        "user": {
-            "id": 1,
-            "email": payload.email,
-            "name": user["name"],
-            "role": user["role"],
-        },
-    }
+        token = f"dev-token-{user['role']}"
+        return {
+            "token": token,
+            "user": {
+                "id": 1,
+                "email": payload.email,
+                "name": user["name"],
+                "role": user["role"],
+            },
+        }
+    finally:
+        db.close()
 
 @app.post("/register.php")
 async def register_local(payload: RegisterRequest):
     """Lokale Demo-Registrierung: legt keinen echten User an,
     gibt aber direkt einen gültigen Token zurück, damit das Frontend weiterarbeiten kann.
     """
-    # Wenn E-Mail schon als Test-User existiert, so tun als ob Login
-    existing = TEST_USERS.get(payload.email)
-    role = payload.role or (existing["role"] if existing else "user")
-    name = payload.name or (existing["name"] if existing else "New User")
+    # Persistent registration: store user in DB (if exists -> 409)
+    db = auth.SessionLocal()
+    try:
+        existing = auth.get_user_by_email(db, payload.email)
+        if existing:
+            # For security, don't reveal too much; return 409 to signal already registered
+            raise HTTPException(status_code=409, detail="Email already registered")
 
-    token = f"dev-token-{role}"
-
-    return {
-        "token": token,
-        "user": {
-            "id": 2,
-            "email": payload.email,
-            "name": name,
-            "role": role,
-        },
-    }
+        created = auth.create_user(db, payload.name or "New User", payload.email, payload.password, payload.role or "user")
+        token = auth.create_access_token(created.email, created.id, created.role)
+        return {
+            "token": token,
+            "user": {"id": created.id, "email": created.email, "name": created.name, "role": created.role},
+        }
+    finally:
+        db.close()
 
 @app.post("/parking-spots", response_model=ParkingSpot)
 async def create_parking_spot(spot: ParkingSpot):
@@ -587,7 +609,10 @@ async def create_user(user: User):
         conn.commit()
         conn.close()
         
-        user.id = user_id
+        user.id = user_id        sudo -u deploy -i
+        cd /var/www/parkingsrv
+        git clone <dein-repo-url> .   # oder git pull falls schon vorhanden
+        chmod +x deploy/*.sh
         return user
         
     except sqlite3.IntegrityError:

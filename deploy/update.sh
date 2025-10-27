@@ -36,13 +36,32 @@ docker pull ${REGISTRY}/${REPO_OWNER}/parking-backend:${IMAGE_TAG}
 echo "Pulling frontend image: ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}"
 docker pull ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}
 
-# Run DB migrations if present (safe, idempotent)
-if [ -x ./deploy/migrate_db.sh ]; then
-	echo "Running DB migration: ./deploy/migrate_db.sh"
-	./deploy/migrate_db.sh || echo "Migration script failed (continuing)"
+# Run DB migrations: prefer running inside the backend container (so Python deps from the image are available)
+echo "Attempting to run migrations inside backend container (docker-compose run)"
+set +e
+if docker-compose -f ${COMPOSE_FILE} config --services | grep -q '^backend$'; then
+	# Try Alembic inside container first
+	echo "Running Alembic upgrade head inside backend container (preferred)..."
+	if docker-compose -f ${COMPOSE_FILE} run --rm backend python3 -m alembic -c backend/alembic.ini upgrade head; then
+		echo "Alembic migrations applied inside container"
+	else
+		echo "Alembic inside container failed — trying SQLAlchemy create_all inside container"
+		if docker-compose -f ${COMPOSE_FILE} run --rm backend python3 -c "import auth; auth.init_db()"; then
+			echo "create_all executed inside container"
+		else
+			echo "Container-based migrations failed — falling back to host migrate script if present"
+			if [ -x ./deploy/migrate_db.sh ]; then
+				echo "Running host-side ./deploy/migrate_db.sh"
+				./deploy/migrate_db.sh || echo "Host-side migration script failed (continuing)"
+			else
+				echo "No host migrate_db.sh present or executable — skipping migrations"
+			fi
+		fi
+	fi
 else
-	echo "No migrate_db.sh found or not executable - skipping migrations"
+	echo "No backend service defined in compose — skipping container-based migrations"
 fi
+set -e
 
 # Ensure any previous stack is stopped/removed to avoid container rename conflicts
 echo "Stopping any existing compose stack (safe): docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true"

@@ -33,8 +33,10 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-const BACKEND_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://api.gashis.ch'  // Production API-Domain (Backend hängt unter /api)
+// In production use the same origin (relative paths) so the front-end talks to
+// the backend through the same host (avoids external domain/cert problems).
+const BACKEND_URL = process.env.NODE_ENV === 'production'
+  ? '' // relative -> requests go to the same host, e.g. /api/... or /register.php
   : 'http://localhost:8000';
 const API = `${BACKEND_URL}`;
 

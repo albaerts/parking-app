@@ -111,6 +111,45 @@ def main():
 
     print('Connecting to Postgres via', DATABASE_URL)
     with engine.begin() as pg_conn:
+        # Ensure target tables exist (idempotent). Alembic may have created users but other tables
+        # (parking_spots, hardware_devices, hardware_commands) could be missing; create them here if needed.
+        pg_conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS parking_spots (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                address TEXT,
+                latitude DOUBLE PRECISION,
+                longitude DOUBLE PRECISION,
+                status TEXT,
+                price_per_hour NUMERIC,
+                created_at TIMESTAMP
+            )
+        '''))
+        pg_conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS hardware_devices (
+                id INTEGER PRIMARY KEY,
+                hardware_id TEXT UNIQUE,
+                owner_email TEXT,
+                parking_spot_id INTEGER,
+                created_at TIMESTAMP
+            )
+        '''))
+        pg_conn.execute(text('''
+            CREATE TABLE IF NOT EXISTS hardware_commands (
+                id INTEGER PRIMARY KEY,
+                hardware_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                parameters TEXT,
+                status TEXT DEFAULT 'queued',
+                issued_by TEXT,
+                created_at TIMESTAMP,
+                claimed_at TIMESTAMP,
+                executed_at TIMESTAMP
+            )
+        '''))
+
+        print('Ensured target tables exist')
+
         print('Copying users...')
         u = copy_users(conn_sqlite, pg_conn)
         print('Copied users:', u)

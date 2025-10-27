@@ -6,7 +6,7 @@ import sqlite3
 import json
 import os
 from datetime import datetime
-import auth
+from backend import auth
 
 # FastAPI App für gashis.ch
 app = FastAPI(

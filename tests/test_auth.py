@@ -6,9 +6,15 @@ BASE = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
 
 
 def test_register_login_flow():
-    email = f"smoke+{uuid.uuid4().hex[:8]}@example.com"
-    name = "smoke_user"
-    password = "TestPass123!"
+    # Allow caller (workflow) to provide a deterministic test email via TEST_SMOKE_EMAIL
+    env_email = os.environ.get("TEST_SMOKE_EMAIL")
+    if env_email:
+        email = env_email
+    else:
+        email = f"smoke+{uuid.uuid4().hex[:8]}@example.com"
+
+    name = os.environ.get("TEST_SMOKE_NAME", "smoke_user")
+    password = os.environ.get("TEST_SMOKE_PASSWORD", "TestPass123!")
 
     # Register (send JSON body)
     r = requests.post(f"{BASE}/register.php", json={"name": name, "email": email, "password": password})

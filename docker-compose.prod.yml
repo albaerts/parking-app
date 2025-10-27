@@ -15,12 +15,25 @@ services:
     ports:
       - "8000:8000"
     restart: always
+      depends_on:
+        - postgres
 
   frontend:
     image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-yourorg}/parking-frontend:${IMAGE_TAG:-latest}
     container_name: parking_frontend
     ports:
       - "3000:80"
+    restart: always
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: parking_postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-parking}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-parking_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-parkingdb}
+    volumes:
+      - parking_pgdata:/var/lib/postgresql/data
     restart: always
   proxy:
     image: nginx:stable-alpine
@@ -37,3 +50,7 @@ services:
       - frontend
       - backend
     restart: always
+
+volumes:
+  parking_pgdata:
+    driver: local

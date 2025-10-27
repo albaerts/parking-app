@@ -28,3 +28,4 @@ typer>=0.9.0
 # Database migrations
 alembic>=1.11.0
 # Custom integrations
+psycopg2-binary>=2.9.6

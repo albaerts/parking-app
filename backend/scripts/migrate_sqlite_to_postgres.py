@@ -163,6 +163,22 @@ def main():
         c = copy_hardware_commands(conn_sqlite, pg_conn)
         print('Copied hardware_commands:', c)
 
+        # After copying rows with explicit IDs, reset Postgres sequences so nextval()
+        # will produce values > current MAX(id) and avoid duplicate-key errors.
+        def reset_seq(pg_conn, table_name, id_col='id'):
+            try:
+                stmt = text(
+                    "SELECT setval(pg_get_serial_sequence(:table, :col), COALESCE((SELECT MAX(id) FROM " + table_name + "), 1));"
+                )
+                # use a raw SQL call - pg_get_serial_sequence takes identifiers, so pass as text
+                pg_conn.execute(text(f"SELECT setval(pg_get_serial_sequence('{table_name}','{id_col}'), COALESCE((SELECT MAX({id_col}) FROM {table_name}), 1));"))
+                print(f"Reset sequence for {table_name}")
+            except Exception as e:
+                print(f"Warning: failed to reset sequence for {table_name}: {e}")
+
+        for tbl in ('users', 'parking_spots', 'hardware_devices', 'hardware_commands'):
+            reset_seq(pg_conn, tbl)
+
     conn_sqlite.close()
     print('Migration complete')
 

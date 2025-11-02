@@ -26,6 +26,8 @@
 #include "esp32-hal-ledc.h"
 #endif
 // Optional: use ESP32Servo library if available (easier portability)
+#include <Wire.h>
+#include <Adafruit_MMC56x3.h>
 #if __has_include(<ESP32Servo.h>)
 #include <ESP32Servo.h>
 #define HAVE_ESP32SERVO 1
@@ -45,6 +47,97 @@
 // Hall sensor (A3144E) signal pin (active LOW with pull-up)
 #define HALL_SENSOR      32
 
+// I2C pins for MMC5603
+#define I2C_SDA 21
+#define I2C_SCL 22
+
+// MMC5603 settings
+const uint8_t MMC5603_ADDR = 0x30;
+Adafruit_MMC5603 mmc;
+bool mmc_present = false;
+bool mmc_fallback = false;
+float mmc_baseline = 0.0f;
+float mmc_sigma = 0.0f;
+unsigned long mmc_lastSample = 0;
+const int MMC_SAMPLE_HZ = 25;
+
+// --- MMC helper functions (small fallback path) ---
+bool mmc_i2cPing(uint8_t addr) {
+  Wire.beginTransmission(addr);
+  return (Wire.endTransmission() == 0);
+}
+uint8_t mmc_rd8(uint8_t reg) {
+  Wire.beginTransmission(MMC5603_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return 0xFF;
+  Wire.requestFrom(MMC5603_ADDR, (uint8_t)1);
+  if (!Wire.available()) return 0xFF;
+  return Wire.read();
+}
+bool mmc_wr8(uint8_t reg, uint8_t val) {
+  Wire.beginTransmission(MMC5603_ADDR);
+  Wire.write(reg);
+  Wire.write(val);
+  return (Wire.endTransmission() == 0);
+}
+bool mmc_tmTriggerMag() {
+  if (!mmc_wr8(0x1B, 0x01)) return false; // REG_CTRL0 TM_M
+  uint32_t t0 = millis();
+  while (!(mmc_rd8(0x18) & (1 << 6))) { // REG_STATUS MAG_RDY
+    if (millis() - t0 > 100) return false;
+    delay(5);
+  }
+  return true;
+}
+bool mmc_readMagXYZ(float &mx, float &my, float &mz) {
+  Wire.beginTransmission(MMC5603_ADDR);
+  Wire.write(0x00);
+  if (Wire.endTransmission(false) != 0) return false;
+  Wire.requestFrom(MMC5603_ADDR, (uint8_t)9);
+  if (Wire.available() < 9) return false;
+  uint8_t b[9];
+  for (int i = 0; i < 9; i++) b[i] = Wire.read();
+  int32_t x = ((uint32_t)b[0] << 12) | ((uint32_t)b[1] << 4) | (b[6] >> 4);
+  int32_t y = ((uint32_t)b[2] << 12) | ((uint32_t)b[3] << 4) | (b[7] >> 4);
+  int32_t z = ((uint32_t)b[4] << 12) | ((uint32_t)b[5] << 4) | (b[8] >> 4);
+  x -= (uint32_t)1 << 19;
+  y -= (uint32_t)1 << 19;
+  z -= (uint32_t)1 << 19;
+  mx = (float)x * 0.00625f;
+  my = (float)y * 0.00625f;
+  mz = (float)z * 0.00625f;
+  return true;
+}
+bool mmc_readToFloats(float &mx, float &my, float &mz) {
+  if (mmc_present && !mmc_fallback) {
+    sensors_event_t e;
+    mmc.getEvent(&e);
+    mx = e.magnetic.x; my = e.magnetic.y; mz = e.magnetic.z;
+    return true;
+  } else if (mmc_present && mmc_fallback) {
+    return mmc_readMagXYZ(mx,my,mz);
+  }
+  return false;
+}
+void mmc_calibrateBaseline(int seconds=8) {
+  if (!mmc_present) return;
+  Serial.println("MMC: calibrating baseline...");
+  int samples = seconds * MMC_SAMPLE_HZ;
+  double sum = 0, sum2 = 0;
+  for (int i=0;i<samples;i++) {
+    while (millis() - mmc_lastSample < 1000 / MMC_SAMPLE_HZ) delay(1);
+    mmc_lastSample = millis();
+    float mx,my,mz;
+    if (!mmc_readToFloats(mx,my,mz)) { i--; delay(5); continue; }
+    float M = sqrt(mx*mx + my*my + mz*mz);
+    sum += M; sum2 += M*M;
+  }
+  mmc_baseline = sum / samples;
+  float var = (sum2 / samples) - (mmc_baseline*mmc_baseline);
+  mmc_sigma = var > 0 ? sqrt(var) : 0;
+  Serial.printf("MMC baseline=%.2f uT sigma=%.2f\n", mmc_baseline, mmc_sigma);
+}
+
 // Actuators (avoid GPIO6-11 used by SPI flash)
 #define RELAY_UP        25
 // Moved RELAY_DOWN off GPIO26 to avoid conflict with SIM_TX (GPIO26)
@@ -55,7 +148,7 @@
 // Note: On ESP32 you should use numeric GPIOs for analogRead; A0/A1 are not defined.
 #if defined(ARDUINO_ARCH_ESP32)
   // Pick two ADC-capable GPIOs that are free on your wiring. Adjust if needed.
-  #define BATTERY_ADC   14
+  #define BATTERY_ADC   35
   #define SOLAR_ADC     15
 #else
   #define BATTERY_ADC   A0
@@ -119,7 +212,7 @@
   #endif
 #endif
 // Servo configuration (active when USE_SERVO==1)
-#define SERVO_PIN           21
+#define SERVO_PIN           14
 #define SERVO_CHANNEL       4
 #define SERVO_FREQ_HZ       50
 #define SERVO_RES_BITS      16
@@ -210,7 +303,31 @@ static void loadSettingsFromEEPROM() {
 }
 const char* DEVICE_ID = "PARK_DEVICE_001";  // Unique per device
 // Target your stable production API domain (Cloudflare/HTTPS)
-const char* API_BASE = "https://api.gashis.ch/api";  // Public API base
+// API configuration
+// NOTE: The user-facing web app is served at https://parking.gashis.ch
+// The firmware should always talk to the canonical API host below.
+const char* API_BASE = "https://api.gashis.ch/api";  // Canonical API base for device HTTP calls
+// Fallback disabled — firmware will use API_BASE only
+const char* API_ALT = "";      // Fallback API base (empty = disabled)
+
+// Normalized runtime bases (filled during setup())
+String apiBaseNorm = String(API_BASE);
+String apiAltNorm = String(API_ALT);
+
+// Normalize an API base string to a canonical form that ends with '/api' and has no trailing '/'
+String normalizeApiBase(const char* rawBase) {
+  if (rawBase == nullptr) return String("");
+  String s = String(rawBase);
+  s.trim();
+  if (s.length() == 0) return String("");
+  // Remove trailing slashes
+  while (s.endsWith("/")) s.remove(s.length()-1);
+  // If it doesn't end with '/api', append '/api'
+  if (!s.endsWith("/api")) {
+    s += "/api";
+  }
+  return s;
+}
 const char* APN = "data.swisscom.ch";  // SIM provider APN
 // Optional SIM PIN: SIM PIN is disabled on your SIM, keep empty
 const char* SIM_PIN = "";  // "" = no auto CPIN; set if SIM requires PIN
@@ -396,6 +513,12 @@ void setup() {
   // Initialize EEPROM for settings
   EEPROM.begin(512);
   loadSettingsFromEEPROM();
+
+  // Normalize API base strings so firmware builds correct URLs regardless of user input
+  apiBaseNorm = normalizeApiBase(API_BASE);
+  apiAltNorm = normalizeApiBase(API_ALT);
+  Serial.print("API base normalized: "); Serial.println(apiBaseNorm);
+  if (apiAltNorm.length() > 0) { Serial.print("API alt normalized: "); Serial.println(apiAltNorm); }
 
   // Initialize pins (uses loaded settings for servo positions)
   initializePins();
@@ -1147,7 +1270,26 @@ void initializeSensors() {
   digitalWrite(ULTRASONIC_TRIG, LOW);
   delayMicroseconds(2);
   
-  // Magnetometer support removed; using Hall GPIO exclusively
+  // Initialize I2C and attempt to detect MMC5603 magnetometer
+  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.setClock(100000);
+  mmc_present = false;
+  mmc_fallback = false;
+  if (mmc_i2cPing(MMC5603_ADDR)) {
+    // Try library init first
+    if (mmc.begin(MMC5603_ADDR, &Wire)) {
+      Serial.println("MMC5603: found (library mode)");
+      mmc_present = true;
+      mmc_fallback = false;
+    } else {
+      // Library didn't initialize correctly but device ACKs — enable fallback
+      Serial.println("MMC5603: device ACKs but library init failed — enabling fallback path");
+      mmc_present = true;
+      mmc_fallback = true;
+    }
+  } else {
+    Serial.println("MMC5603: not detected on I2C");
+  }
   
   // Check initial barrier position
   // With servo, track position via state; with relays, use limit switch
@@ -1158,6 +1300,11 @@ void initializeSensors() {
 #endif
   
   Serial.println("Sensors initialized");
+  // (boot servo sweep removed for production; keep calibration below)
+  // Calibrate MMC baseline after servo verification (non-blocking for absent sensor)
+  if (mmc_present) {
+    mmc_calibrateBaseline(6);
+  }
 }
 
 void updateSensorReadings() {
@@ -1168,13 +1315,33 @@ void updateSensorReadings() {
   bool was_occupied = state.is_occupied;
   bool occupancy_ultra = (distance > 15 && distance < 200);
 
-  // Read hall sensor (active LOW when magnet present)
-  bool hall_present = (digitalRead(HALL_SENSOR) == LOW);
-  state.hall_detected = hall_present;
+  // Read MMC5603 (preferred) or fall back to Hall sensor if MMC missing
+  bool occupancy_mmc = false;
+  bool mmc_ok = false;
+  float M = 0.0f;
+  if (mmc_present) {
+    float mx=0,my=0,mz=0;
+    mmc_ok = mmc_readToFloats(mx,my,mz);
+    if (mmc_ok) {
+      M = sqrt(mx*mx + my*my + mz*mz);
+      // Compute thresholds (hysteresis)
+      float T_on = max(10.0f, max(mmc_baseline * 0.05f, 3.0f * mmc_sigma));
+      float T_off = max(5.0f, mmc_baseline * 0.02f);
+      if (M > T_on) occupancy_mmc = true;
+      else if (M < T_off) occupancy_mmc = false;
+      else occupancy_mmc = state.is_occupied; // keep previous state inside hysteresis band
+    }
+    state.hall_detected = mmc_ok && occupancy_mmc; // reuse flag for magnet detection
+  } else {
+    // legacy fallback: A3144 hall sensor (active LOW)
+    bool hall_present = (digitalRead(HALL_SENSOR) == LOW);
+    state.hall_detected = hall_present;
+    occupancy_mmc = hall_present;
+  }
 
   // Combine: consider spot occupied if either ultrasonic indicates presence
-  // or magnet is detected by the hall sensor
-  state.is_occupied = occupancy_ultra || hall_present;
+  // or magnet (MMC or Hall fallback) indicates presence
+  state.is_occupied = occupancy_ultra || occupancy_mmc;
   
   // Motion detection
   if (digitalRead(MOTION_SENSOR) == HIGH) {
@@ -1197,7 +1364,12 @@ void updateSensorReadings() {
   if (state.is_occupied != was_occupied) {
     Serial.println("Occupancy changed: " + String(state.is_occupied ? "OCCUPIED" : "FREE"));
     Serial.println("Distance: " + String(distance) + "cm");
-    Serial.print("Hall detected: "); Serial.println(state.hall_detected ? "YES" : "NO");
+    if (mmc_present) {
+      if (mmc_ok) Serial.printf("MMC mag M=%.2f uT (baseline=%.2f sigma=%.2f)\n", M, mmc_baseline, mmc_sigma);
+      else Serial.println("MMC present but sample failed (fallback read)\n");
+    } else {
+      Serial.print("Hall detected: "); Serial.println(state.hall_detected ? "YES" : "NO");
+    }
   }
 }
 
@@ -1421,228 +1593,210 @@ void lowerBarrier() {
 }
 
 // ========== HTTP COMMUNICATION ==========
+// sendHTTPRequest now attempts the primary API base and falls back to API_ALT if the first
+// attempt does not return a 2xx status. Returns true on 2xx and optionally fills response.
 bool sendHTTPRequest(String method, String endpoint, String payload, String* response) {
-  String url = String(API_BASE) + endpoint;
-  bool use_https = url.startsWith("https://");
-  // Extract hostname for DNS resolution diagnostics
-  String host = url;
-  if (host.startsWith("http://")) host.remove(0, 7);
-  if (host.startsWith("https://")) host.remove(0, 8);
-  int slashPos = host.indexOf('/');
-  if (slashPos > 0) host = host.substring(0, slashPos);
+  const String bases[] = { String(API_BASE), String(API_ALT) };
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    String base = bases[attempt];
+    if (base.length() == 0) continue;
+    String url = base + endpoint;
+    bool use_https = url.startsWith("https://");
+    // Extract hostname for DNS resolution diagnostics
+    String host = url;
+    if (host.startsWith("http://")) host.remove(0, 7);
+    if (host.startsWith("https://")) host.remove(0, 8);
+    int slashPos = host.indexOf('/');
+    if (slashPos > 0) host = host.substring(0, slashPos);
 
-  auto readUntil = [&](const String& token, unsigned long timeoutMs) -> String {
-    String buf;
-    unsigned long start = millis();
-    while (millis() - start < timeoutMs) {
-      while (sim800.available()) {
-        char c = (char)sim800.read();
-        buf += c;
-        if (buf.length() > 1024) buf.remove(0, buf.length() - 1024);
-        if (buf.indexOf(token) != -1) {
-          return buf;
-        }
-      }
-      delay(1);
-    }
-    return buf; // may be empty or partial
-  };
-
-  auto readFor = [&](unsigned long ms) -> String {
-    String buf;
-    unsigned long start = millis();
-    while (millis() - start < ms) {
-      while (sim800.available()) {
-        buf += (char)sim800.read();
-      }
-      delay(1);
-    }
-    return buf;
-  };
-
-  // Read exactly N bytes from modem (or until timeout)
-  auto readExact = [&](size_t n, unsigned long timeoutMs) -> String {
-    String buf;
-    unsigned long start = millis();
-    while (buf.length() < (int)n && (millis() - start) < timeoutMs) {
-      while (sim800.available() && buf.length() < (int)n) {
-        buf += (char)sim800.read();
-      }
-      delay(1);
-    }
-    return buf;
-  };
-
-  // TLS config for SIM7600 (HTTPSSL context uses default SSL config index)
-  if (use_https) {
-    sim800.println("AT+CSSLCFG=\"sslversion\",1,4"); // 4 = TLS1.2
-  (void)readFor(g_verbose ? 120 : 40);
-    sim800.println("AT+CSSLCFG=\"sni\",1");          // enable SNI
-  (void)readFor(g_verbose ? 120 : 40);
-    sim800.println("AT+CSSLCFG=\"seclevel\",0");      // 0 = no server cert verification (dev)
-  (void)readFor(g_verbose ? 120 : 40);
-    // Broaden cipher suite selection (0 = auto/all supported)
-    sim800.println("AT+CSSLCFG=\"cipher\",1,0");
-    (void)readFor(g_verbose ? 120 : 40);
-    // Increase SSL negotiation timeout for slow networks (seconds)
-    sim800.println("AT+CSSLCFG=\"negotiatetime\",1,120");
-    (void)readFor(g_verbose ? 150 : 60);
-  // Note: keep TLS settings minimal; additional CSSLCFG options vary by firmware
-  }
-
-  // Init HTTP
-  // Best-effort cleanup in case previous session wasn't closed
-  sim800.println("AT+HTTPTERM");
-  (void)readFor(200);
-  sim800.println("AT+HTTPINIT");
-  (void)readUntil("OK", 1500);
-  // Make sure PDP context 1 is used explicitly for HTTP
-  sim800.println("AT+HTTPPARA=\"CID\",1");
-  (void)readUntil("OK", 800);
-  sim800.println("AT+HTTPPARA=\"CID\",1");
-  (void)readUntil("OK", 800);
-  sim800.println("AT+HTTPPARA=\"REDIR\",1"); // follow redirects
-  (void)readUntil("OK", 800);
-  // Extend overall HTTP action timeout to 60s
-  sim800.println("AT+HTTPPARA=\"TIMEOUT\",60");
-  (void)readUntil("OK", 800);
-
-  // Enable/disable SSL depending on URL scheme
-  sim800.println(String("AT+HTTPSSL=") + (use_https ? "1" : "0"));
-  (void)readUntil("OK", 800);
-
-  // URL
-  sim800.println("AT+HTTPPARA=\"URL\",\"" + url + "\"");
-  (void)readUntil("OK", 1200);
-
-  // Optional: set a User-Agent (some edges behave better)
-  sim800.println("AT+HTTPPARA=\"UA\",\"ESP32-SIM7600/1.0\"");
-  (void)readFor(150);
-
-  // Optional: resolve DNS first to ensure name can be resolved
-  // Set fallback DNS resolvers to improve reliability on some networks
-  sim800.println("AT+CDNSCFG=\"8.8.8.8\",\"1.1.1.1\"");
-  (void)readUntil("OK", 1500);
-  sim800.println("AT+CDNSGIP=\"" + host + "\"");
-  String dns = readUntil("OK", 8000);
-  if (dns.indexOf("+CDNSGIP:") != -1) {
-    Serial.print("DNS resolved: "); Serial.println(dns);
-  } else {
-    Serial.print("DNS resolution pending/failed for host "); Serial.println(host);
-  }
-
-  // POST body if applicable
-  if (method == "POST") {
-    sim800.println("AT+HTTPPARA=\"CONTENT\",\"application/json\"");
-    (void)readUntil("OK", 800);
-    sim800.println("AT+HTTPDATA=" + String(payload.length()) + ",10000");
-    // Wait for DOWNLOAD prompt
-    (void)readUntil("DOWNLOAD", 3000);
-    sim800.print(payload);
-    // Wait for OK after sending data
-    (void)readUntil("OK", 5000);
-  }
-
-  // Perform action: 0=GET, 1=POST
-  simDrain(50);
-  sim800.println(String("AT+HTTPACTION=") + (method == "POST" ? "1" : "0"));
-  // Robust wait for URC: keep collecting until we see +HTTPACTION: or timeout
-  String actionResp;
-  {
-    unsigned long start = millis();
-    int tokenIndex = -1;
-    while (millis() - start < 90000UL) { // up to 90s for TLS over LTE
-      while (sim800.available()) {
-        char c = (char)sim800.read();
-        actionResp += c;
-  if (actionResp.length() > 4096) actionResp.remove(0, actionResp.length() - 2048);
-      }
-      tokenIndex = actionResp.indexOf("+HTTPACTION:");
-      if (tokenIndex != -1) {
-        // After we first see the token, wait for end-of-line to get full numbers
-        unsigned long moreUntil = millis() + 3000;
-        while (millis() < moreUntil) {
-          while (sim800.available()) {
-            char c = (char)sim800.read();
-            actionResp += c;
-            if (actionResp.length() > 4096) actionResp.remove(0, actionResp.length() - 2048);
+    auto readUntil = [&](const String& token, unsigned long timeoutMs) -> String {
+      String buf;
+      unsigned long start = millis();
+      while (millis() - start < timeoutMs) {
+        while (sim800.available()) {
+          char c = (char)sim800.read();
+          buf += c;
+          if (buf.length() > 1024) buf.remove(0, buf.length() - 1024);
+          if (buf.indexOf(token) != -1) {
+            return buf;
           }
-          // Line ends with \n after the URC
-          if (actionResp.indexOf('\n', tokenIndex) != -1) break;
-          delay(10);
         }
-        break;
+        delay(1);
       }
-      delay(20);
-    }
-  }
+      return buf; // may be empty or partial
+    };
 
-  // Parse status and data length
-  int status = -1;
-  int dataLen = 0;
-  {
-    // Expect "+HTTPACTION: <m>,<status>,<len>"
-    int idx = actionResp.indexOf("+HTTPACTION:");
-    if (idx != -1) {
-      // find the comma-separated numbers
-      // skip to first comma
-      int c1 = actionResp.indexOf(',', idx);
-      int c2 = actionResp.indexOf(',', c1 + 1);
-      if (c1 != -1 && c2 != -1) {
-        status = actionResp.substring(c1 + 1, c2).toInt();
-        // read until end of line for len
-        int endLine = actionResp.indexOf('\n', c2 + 1);
-        String lenStr = actionResp.substring(c2 + 1, endLine == -1 ? actionResp.length() : endLine);
-        dataLen = lenStr.toInt();
+    auto readFor = [&](unsigned long ms) -> String {
+      String buf;
+      unsigned long start = millis();
+      while (millis() - start < ms) {
+        while (sim800.available()) {
+          buf += (char)sim800.read();
+        }
+        delay(1);
+      }
+      return buf;
+    };
+
+    // Read exactly N bytes from modem (or until timeout)
+    auto readExact = [&](size_t n, unsigned long timeoutMs) -> String {
+      String buf;
+      unsigned long start = millis();
+      while (buf.length() < (int)n && (millis() - start) < timeoutMs) {
+        while (sim800.available() && buf.length() < (int)n) {
+          buf += (char)sim800.read();
+        }
+        delay(1);
+      }
+      return buf;
+    };
+
+    // TLS config for SIM7600 (HTTPSSL context uses default SSL config index)
+    if (use_https) {
+      sim800.println("AT+CSSLCFG=\"sslversion\",1,4"); // 4 = TLS1.2
+      (void)readFor(g_verbose ? 120 : 40);
+      sim800.println("AT+CSSLCFG=\"sni\",1");          // enable SNI
+      (void)readFor(g_verbose ? 120 : 40);
+      sim800.println("AT+CSSLCFG=\"seclevel\",0");      // 0 = no server cert verification (dev)
+      (void)readFor(g_verbose ? 120 : 40);
+      sim800.println("AT+CSSLCFG=\"cipher\",1,0");
+      (void)readFor(g_verbose ? 120 : 40);
+      sim800.println("AT+CSSLCFG=\"negotiatetime\",1,120");
+      (void)readFor(g_verbose ? 150 : 60);
+    }
+
+    // Init HTTP
+    sim800.println("AT+HTTPTERM");
+    (void)readFor(200);
+    sim800.println("AT+HTTPINIT");
+    (void)readUntil("OK", 1500);
+    sim800.println("AT+HTTPPARA=\"CID\",1");
+    (void)readUntil("OK", 800);
+    sim800.println("AT+HTTPPARA=\"CID\",1");
+    (void)readUntil("OK", 800);
+    sim800.println("AT+HTTPPARA=\"REDIR\",1"); // follow redirects
+    (void)readUntil("OK", 800);
+    sim800.println("AT+HTTPPARA=\"TIMEOUT\",60");
+    (void)readUntil("OK", 800);
+
+    sim800.println(String("AT+HTTPSSL=") + (use_https ? "1" : "0"));
+    (void)readUntil("OK", 800);
+
+    // URL
+    sim800.println("AT+HTTPPARA=\"URL\",\"" + url + "\"");
+    (void)readUntil("OK", 1200);
+
+    sim800.println("AT+HTTPPARA=\"UA\",\"ESP32-SIM7600/1.0\"");
+    (void)readFor(150);
+
+    sim800.println("AT+CDNSCFG=\"8.8.8.8\",\"1.1.1.1\"");
+    (void)readUntil("OK", 1500);
+    sim800.println("AT+CDNSGIP=\"" + host + "\"");
+    String dns = readUntil("OK", 8000);
+    if (dns.indexOf("+CDNSGIP:") != -1) {
+      Serial.print("DNS resolved: "); Serial.println(dns);
+    } else {
+      Serial.print("DNS resolution pending/failed for host "); Serial.println(host);
+    }
+
+    // POST body if applicable
+    if (method == "POST") {
+      sim800.println("AT+HTTPPARA=\"CONTENT\",\"application/json\"");
+      (void)readUntil("OK", 800);
+      sim800.println("AT+HTTPDATA=" + String(payload.length()) + ",10000");
+      (void)readUntil("DOWNLOAD", 3000);
+      sim800.print(payload);
+      (void)readUntil("OK", 5000);
+    }
+
+    // Perform action
+    simDrain(50);
+    sim800.println(String("AT+HTTPACTION=") + (method == "POST" ? "1" : "0"));
+    String actionResp;
+    {
+      unsigned long start = millis();
+      int tokenIndex = -1;
+      while (millis() - start < 90000UL) {
+        while (sim800.available()) {
+          char c = (char)sim800.read();
+          actionResp += c;
+          if (actionResp.length() > 4096) actionResp.remove(0, actionResp.length() - 2048);
+        }
+        tokenIndex = actionResp.indexOf("+HTTPACTION:");
+        if (tokenIndex != -1) {
+          unsigned long moreUntil = millis() + 3000;
+          while (millis() < moreUntil) {
+            while (sim800.available()) {
+              char c = (char)sim800.read();
+              actionResp += c;
+              if (actionResp.length() > 4096) actionResp.remove(0, actionResp.length() - 2048);
+            }
+            if (actionResp.indexOf('\n', tokenIndex) != -1) break;
+            delay(10);
+          }
+          break;
+        }
+        delay(20);
       }
     }
-  }
 
-  // Read body if any
-  String body = "";
-  if (dataLen > 0) {
-    // Ask modem to return exactly dataLen bytes from start of body
-    sim800.println("AT+HTTPREAD=0," + String(dataLen));
-    // Wait for header line "+HTTPREAD: <len>\r\n"
-    (void)readUntil("+HTTPREAD:", 3000);
-    (void)readUntil("\n", 1000); // consume header line fully
-    // Now read exact body bytes
-    body = readExact((size_t)dataLen, min(25000UL, 4000UL + (unsigned long)dataLen));
-    // Consume trailing CRLF and OK if present (do not append to body)
-    (void)readUntil("OK", 2000);
-  }
+    int status = -1;
+    int dataLen = 0;
+    {
+      int idx = actionResp.indexOf("+HTTPACTION:");
+      if (idx != -1) {
+        int c1 = actionResp.indexOf(',', idx);
+        int c2 = actionResp.indexOf(',', c1 + 1);
+        if (c1 != -1 && c2 != -1) {
+          status = actionResp.substring(c1 + 1, c2).toInt();
+          int endLine = actionResp.indexOf('\n', c2 + 1);
+          String lenStr = actionResp.substring(c2 + 1, endLine == -1 ? actionResp.length() : endLine);
+          dataLen = lenStr.toInt();
+        }
+      }
+    }
 
-  if (response) {
-    *response = body;
-  }
+    String body = "";
+    if (dataLen > 0) {
+      sim800.println("AT+HTTPREAD=0," + String(dataLen));
+      (void)readUntil("+HTTPREAD:", 3000);
+      (void)readUntil("\n", 1000);
+      body = readExact((size_t)dataLen, min(25000UL, 4000UL + (unsigned long)dataLen));
+      (void)readUntil("OK", 2000);
+    }
 
-  // Terminate HTTP
-  sim800.println("AT+HTTPTERM");
-  String termResp = readUntil("OK", g_verbose ? 1500 : 600);
-  if (termResp.indexOf("OK") == -1) {
-    // Some firmwares may return ERROR if already terminated
-  (void)readUntil("ERROR", g_verbose ? 800 : 300);
-  }
-  // Drain any leftover bytes to avoid stray prints later
-  simDrain(g_verbose ? 80 : 20);
+    if (response) *response = body;
 
-  // Log status and snippet
-  Serial.print("HTTP "); Serial.print(method); Serial.print(" "); Serial.print(url);
-  Serial.print(" -> status="); Serial.print(status);
-  Serial.print(" len="); Serial.print(dataLen);
-  if (g_verbose) {
-    if (actionResp.length() > 0) { Serial.print(" actionResp="); Serial.print(actionResp); }
-    if (body.length() > 0) {
-      String snippet = body.substring(0, min(120, (int)body.length()));
-      Serial.print(" body[0:120]="); Serial.println(snippet);
+    sim800.println("AT+HTTPTERM");
+    String termResp = readUntil("OK", g_verbose ? 1500 : 600);
+    if (termResp.indexOf("OK") == -1) {
+      (void)readUntil("ERROR", g_verbose ? 800 : 300);
+    }
+    simDrain(g_verbose ? 80 : 20);
+
+    Serial.print("HTTP "); Serial.print(method); Serial.print(" "); Serial.print(url);
+    Serial.print(" -> status="); Serial.print(status);
+    Serial.print(" len="); Serial.print(dataLen);
+    if (g_verbose) {
+      if (actionResp.length() > 0) { Serial.print(" actionResp="); Serial.print(actionResp); }
+      if (body.length() > 0) {
+        String snippet = body.substring(0, min(120, (int)body.length()));
+        Serial.print(" body[0:120]="); Serial.println(snippet);
+      } else {
+        Serial.println();
+      }
     } else {
       Serial.println();
     }
-  } else {
-    Serial.println();
+
+    // Success -> return true; otherwise try next base if available
+    if (status >= 200 && status < 300) return true;
+    else {
+      Serial.print("Request to "); Serial.print(base); Serial.println(" returned non-2xx; trying next base if available...");
+    }
   }
 
-  return status >= 200 && status < 300;
+  return false;
 }
 
 // Convert AT+CSQ to dBm. Returns -999 on failure.
@@ -1711,11 +1865,4 @@ void handleEmergencyStop() {
 }
 
 // (Magnetometer helpers removed per user request)
-# Prüfen, ob der Benutzer noch existiert
-id assistant-temp || echo "assistant-temp nicht vorhanden"
-
-# Sicherstellen, dass Home weg ist (falls entfernt)
-ls -ld /home/assistant-temp || echo "/home/assistant-temp nicht vorhanden"
-
-# Optional: bestätige, dass kein authorized_keys mehr existiert
-test -f /home/assistant-temp/.ssh/authorized_keys && echo "authorized_keys noch vorhanden" || echo "authorized_keys entfernt"
+// (Cleanup notes removed)

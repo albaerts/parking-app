@@ -58,33 +58,94 @@ jobs:
 
     steps:
       - name: Deploy via SSH to VPS
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT }}
           script: |
-            set -euo pipefail
-            cd /var/www/parkingsrv || exit 1
-            # If a GHCR token is provided, login so docker pull can authenticate (optional)
-            if [ -n "${DEPLOY_GHCR_TOKEN:-}" ]; then
-              echo "Logging into ghcr.io"
-              echo "${DEPLOY_GHCR_TOKEN}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin || true
+            set -euxo pipefail
+
+            REMOTE_PATH="${{ secrets.DEPLOY_REMOTE_PATH }}"
+            if [ -z "${REMOTE_PATH}" ]; then
+              REMOTE_PATH="/var/www/parkingsrv"
             fi
-            echo "Fetching latest repo and running deploy/update.sh"
-            git fetch origin || true
-            # Create a lightweight backup of the current HEAD (for investigation/rollback if needed)
-            git branch -f backup-before-deploy-$(date +%s) || true
+            cd "${REMOTE_PATH}" || exit 1
 
-            # Create/force-update a local deploy branch that mirrors the triggering remote branch
-            BRANCH_NAME='${{ github.ref_name }}'
-            echo "Resetting to origin/$BRANCH_NAME (local deploy-$BRANCH_NAME branch)"
-            git checkout -B deploy-$BRANCH_NAME origin/$BRANCH_NAME || true
+            echo "=== Checking port bindings for 80/443 on host (to detect legacy nginx) ==="
+            if command -v ss >/dev/null 2>&1; then
+              ss -ltnp | (grep -E ":[8]{2}(0|43)\s" || true)
+            else
+              netstat -ltnp 2>/dev/null | (grep -E ":[8]{2}(0|43)\s" || true) || true
+            fi
 
-            # Show current branch and latest commit for logs
-            git rev-parse --abbrev-ref HEAD || true
-            git log -n 1 --pretty=oneline || true
-            ./deploy/update.sh latest || true
+            # If legacy host nginx is active (binding 80/443), stop it to free the ports for the proxy container
+            if command -v systemctl >/dev/null 2>&1; then
+              if systemctl is-active --quiet nginx; then
+                echo "Host nginx is active — stopping to free ports 80/443 for docker proxy"
+                systemctl stop nginx || true
+              else
+                echo "Host nginx is not active"
+              fi
+            fi
+
+            # If a GHCR token is provided, login so docker pull can authenticate (optional)
+            if [ -n "${GHCR_PAT:-}" ]; then
+              echo "Logging into ghcr.io"
+              echo "${GHCR_PAT}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin || true
+            else
+              echo "No GHCR_PAT provided — assuming images are public or host is already logged in"
+            fi
+
+            echo "Fetching latest repo and preparing deploy branch"
+            if [ -d .git ]; then
+              git fetch origin || true
+              git branch -f backup-before-deploy-$(date +%s) || true
+              BRANCH_NAME='${{ github.ref_name }}'
+              git checkout -B deploy-$BRANCH_NAME origin/$BRANCH_NAME || true
+              git rev-parse --abbrev-ref HEAD || true
+              git log -n 1 --pretty=oneline || true
+            else
+              echo "Warning: ${REMOTE_PATH} is not a git repository; continuing with existing files"
+            fi
+
+            echo "Running deploy/update.sh with image tag $IMAGE_TAG"
+            chmod +x ./deploy/update.sh || true
+            IMAGE_TAG='${{ github.sha }}' ./deploy/update.sh '${{ github.sha }}'
+
+            echo "=== Docker processes after compose up ==="
+            docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+
+            # Run DB migration helper if present
+            if [ -f ./deploy/migrate_db.sh ]; then
+              chmod +x ./deploy/migrate_db.sh || true
+              ./deploy/migrate_db.sh || true
+            fi
+
+            # Sanity check public site
+            if command -v curl >/dev/null 2>&1; then
+              echo "Running public site sanity check..."
+              TMPFILE=$(mktemp)
+              HTTP=$(curl -sL -w "%{http_code}" -o "$TMPFILE" "https://parking.gashis.ch/" || echo "000")
+              echo "public_site_status=$HTTP"
+              if [ "$HTTP" = "200" ]; then
+                if grep -q "ParkingApp | Smart Parking Solutions" "$TMPFILE"; then
+                  echo "Public site content check passed"
+                else
+                  echo "Public site content check FAILED - expected title not found" >&2
+                  head -c 200 "$TMPFILE" >&2 || true
+                  rm -f "$TMPFILE"
+                  exit 4
+                fi
+              else
+                echo "Public site check failed (status=$HTTP)" >&2
+                rm -f "$TMPFILE"
+                exit 3
+              fi
+              rm -f "$TMPFILE"
+            else
+              echo "curl not available on remote host — skipping public site check"
+            fi
         env:
-          DEPLOY_GHCR_TOKEN: ${{ secrets.DEPLOY_GHCR_TOKEN }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT || secrets.DEPLOY_GHCR_TOKEN }}

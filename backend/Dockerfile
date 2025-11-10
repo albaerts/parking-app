@@ -8,12 +8,23 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential gcc git \
+    && apt-get install -y --no-install-recommends \
+       build-essential \
+       gcc \
+       git \
+       libffi-dev \
+       python3-dev \
+       libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Accept commit SHA build arg to expose version info inside the container
+ARG COMMIT_SHA=unknown
+ENV BACKEND_COMMIT_SHA=${COMMIT_SHA}
+RUN echo "${COMMIT_SHA}" > /app/backend/version.txt
 
 # Copy application code into a package folder so imports like `backend.server_gashis` work
 RUN mkdir -p /app/backend

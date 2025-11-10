@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
 import './App.css';
 import axios from 'axios';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -36,12 +38,11 @@ L.Icon.Default.mergeOptions({
 // In production use the same origin (relative paths) so the front-end talks to
 // the backend through the same host (avoids external domain/cert problems).
 const BACKEND_URL = process.env.NODE_ENV === 'production'
-  ? '' // relative -> requests go to the same host, e.g. /api/... or /register.php
-  : 'http://localhost:8000';
+  ? '' // relative -> same origin in Produktion
+  : `http://${window.location.hostname}:8000`; // im LAN funktioniert auch 192.168.x.x:8000
 const API = `${BACKEND_URL}`;
 
-console.log('BACKEND_URL:', BACKEND_URL);
-console.log('API:', API);
+// Entfernt: Google Maps / Places – wir verwenden rein freie Quellen (Photon + Nominatim)
 
 // Hardware control helper (dev): enqueue command in memory backend
 async function sendHardwareCommandSimple(hardwareId, command, parameters = {}, secret = '') {
@@ -109,11 +110,15 @@ const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    console.log('Login attempt:', email, 'API URL:', API);
     try {
-      console.log('Sending request to:', `${API}/login.php`);
-      const response = await axios.post(`${API}/login.php`, { email, password });
-      console.log('Login response:', response.data);
+      // Prefer modern endpoint, fallback to legacy .php if needed
+      let response;
+      try {
+        response = await axios.post(`${API}/auth/login`, { email, password });
+      } catch (e) {
+        // fallback legacy
+        response = await axios.post(`${API}/login.php`, { email, password });
+      }
       const { token, user: userData } = response.data;
       setToken(token);
       setUser(userData);
@@ -129,13 +134,17 @@ const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password, role = 'user') => {
     try {
-      const response = await axios.post(`${API}/register.php`, { name, email, password, role });
-      // Nach der Registrierung automatisch einloggen
-      await login(email, password);
-      return true;
+      let response;
+      try {
+        response = await axios.post(`${API}/auth/register`, { name, email, password, role });
+      } catch (e) {
+        response = await axios.post(`${API}/register.php`, { name, email, password, role });
+      }
+      return { success: true, message: response.data.message || 'Registration successful! Please check your email to verify your account.' };
     } catch (error) {
       console.error('Registration failed:', error);
-      return false;
+      const errorMessage = error.response?.data?.detail || 'Registration failed. Please try again.';
+      return { success: false, message: errorMessage };
     }
   };
 
@@ -453,8 +462,8 @@ const Login = ({ onSwitchToRegister }) => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to find your perfect parking spot</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">ParkingApp Login</h1>
+          <p className="text-gray-600">Commit: {process.env.REACT_APP_COMMIT_SHA || 'dev'} · Bitte anmelden</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -511,15 +520,29 @@ const Register = ({ onSwitchToLogin }) => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('user');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [messageType, setMessageType] = useState('error'); // 'error' or 'success'
   const { register } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const success = await register(name, email, password, role);
-    if (!success) {
-      alert('Registration failed. Please try again.');
+    setMessage(null);
+    
+    const result = await register(name, email, password, role);
+    
+    if (result.success) {
+      setMessageType('success');
+      setMessage(result.message);
+      // Clear form
+      setName('');
+      setEmail('');
+      setPassword('');
+    } else {
+      setMessageType('error');
+      setMessage(result.message);
     }
+    
     setLoading(false);
   };
 
@@ -531,7 +554,39 @@ const Register = ({ onSwitchToLogin }) => {
           <p className="text-gray-600">Create your account to start parking smarter</p>
         </div>
         
+        {message && (
+          <div className={`mb-6 p-4 rounded-lg ${messageType === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+            <p className="text-sm font-medium">{message}</p>
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Account Type Toggle Switch */}
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <label className="block text-center text-base font-bold text-gray-900 mb-4">Account Type</label>
+            <div className="flex items-center justify-center space-x-4">
+              <span className={`text-sm font-medium ${role === 'user' ? 'text-blue-600' : 'text-gray-500'}`}>
+                Parking User
+              </span>
+              <button
+                type="button"
+                onClick={() => setRole(role === 'user' ? 'owner' : 'user')}
+                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  role === 'owner' ? 'bg-blue-600' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    role === 'owner' ? 'translate-x-9' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className={`text-sm font-medium ${role === 'owner' ? 'text-blue-600' : 'text-gray-500'}`}>
+                Parking Lot Owner
+              </span>
+            </div>
+          </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
             <input
@@ -563,19 +618,6 @@ const Register = ({ onSwitchToLogin }) => {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
             />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="user">Parking User</option>
-              <option value="owner">Parking Lot Owner</option>
-              <option value="admin">Administrator</option>
-            </select>
           </div>
           
           <button
@@ -1579,6 +1621,7 @@ const AccountManagement = () => {
     last_name: '',
     phone: '',
     address: '',
+    house_number: '',
     city: '',
     zip_code: '',
     country: '',
@@ -1593,18 +1636,11 @@ const AccountManagement = () => {
     confirm_password: ''
   });
 
-  // Email change form state
-  const [emailData, setEmailData] = useState({
-    new_email: '',
-    password: ''
-  });
-
   // Account summary state
   const [accountSummary, setAccountSummary] = useState(null);
 
   useEffect(() => {
     loadUserProfile();
-    loadAccountSummary();
   }, []);
 
   const loadUserProfile = async () => {
@@ -1617,6 +1653,7 @@ const AccountManagement = () => {
         last_name: response.data.last_name || '',
         phone: response.data.phone || '',
         address: response.data.address || '',
+        house_number: response.data.house_number || '',
         city: response.data.city || '',
         zip_code: response.data.zip_code || '',
         country: response.data.country || '',
@@ -1626,17 +1663,6 @@ const AccountManagement = () => {
     } catch (error) {
       console.error('Error loading profile:', error);
       setError('Failed to load profile data');
-    }
-  };
-
-  const loadAccountSummary = async () => {
-    try {
-      const response = await axios.get(`${API}/user/account-summary`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setAccountSummary(response.data);
-    } catch (error) {
-      console.error('Error loading account summary:', error);
     }
   };
 
@@ -1811,13 +1837,13 @@ const AccountManagement = () => {
             {/* Profile Information Section */}
             {activeSection === 'profile' && (
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-6">Profile Information</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Profilinformationen</h2>
                 
                 <form onSubmit={handleProfileUpdate} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        First Name
+                        Vorname
                       </label>
                       <input
                         type="text"
@@ -1828,7 +1854,7 @@ const AccountManagement = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Last Name
+                        Nachname
                       </label>
                       <input
                         type="text"
@@ -1841,7 +1867,7 @@ const AccountManagement = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number
+                      Telefonnummer
                     </label>
                     <input
                       type="tel"
@@ -1851,22 +1877,35 @@ const AccountManagement = () => {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Address
-                    </label>
-                    <input
-                      type="text"
-                      value={profileData.address}
-                      onChange={(e) => setProfileData({...profileData, address: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Strasse
+                      </label>
+                      <input
+                        type="text"
+                        value={profileData.address}
+                        onChange={(e) => setProfileData({...profileData, address: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Hausnummer
+                      </label>
+                      <input
+                        type="text"
+                        value={profileData.house_number}
+                        onChange={(e) => setProfileData({...profileData, house_number: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        City
+                        Stadt
                       </label>
                       <input
                         type="text"
@@ -1877,7 +1916,7 @@ const AccountManagement = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        ZIP Code
+                        PLZ
                       </label>
                       <input
                         type="text"
@@ -1888,7 +1927,7 @@ const AccountManagement = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Country
+                        Land
                       </label>
                       <input
                         type="text"
@@ -1901,7 +1940,7 @@ const AccountManagement = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Secondary Email
+                      Sekundäre E-Mail
                     </label>
                     <input
                       type="email"
@@ -1913,7 +1952,7 @@ const AccountManagement = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date of Birth
+                      Geburtsdatum
                     </label>
                     <input
                       type="date"
@@ -1928,7 +1967,7 @@ const AccountManagement = () => {
                     disabled={loading}
                     className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition duration-200 disabled:opacity-50"
                   >
-                    {loading ? 'Updating...' : 'Update Profile'}
+                    {loading ? 'Aktualisiere...' : 'Profil aktualisieren'}
                   </button>
                 </form>
               </div>
@@ -2435,8 +2474,459 @@ const ParkingMapContent = () => {
   );
 };
 
+// Address Autocomplete Component – via Backend Proxy (/api/autocomplete)
+const AddressAutocomplete = ({ value, onChange, onPlaceSelected }) => {
+  const [inputValue, setInputValue] = useState(value || '');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userLoc, setUserLoc] = useState(null); // {lat, lng}
+  const timeoutRef = useRef(null);
+  const lastQueryRef = useRef('');
+  const deepSearchLockRef = useRef(false); // verhindert Spam bei Fallback-Suche
+
+  useEffect(() => {
+    setInputValue(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    // Versuche Nutzer-Standort für bessere Treffer (optional)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {
+          // Falls verweigert, verwenden wir Zürich als Default-Bias
+          setUserLoc({ lat: 47.3769, lng: 8.5417 });
+        },
+        { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
+      );
+    } else {
+      // Fallback: Zürich Zentrum
+      setUserLoc({ lat: 47.3769, lng: 8.5417 });
+    }
+  }, []);
+
+  // Backend-Proxy: kombiniert Photon + Nominatim mit Caching und Dedupe
+  const fetchServerAutocomplete = async (query) => {
+    try {
+      const params = {
+        q: query,
+        limit: 12,
+        countrycodes: 'ch,de,at'
+      };
+      if (userLoc) {
+        params.lat = userLoc.lat;
+        params.lon = userLoc.lng;
+      }
+      const res = await axios.get(`${API}/api/autocomplete`, { params });
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (e) {
+      console.warn('Autocomplete API error:', e?.response?.data || e.message);
+      return [];
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const q = e.target.value;
+    setInputValue(q);
+    onChange(q);
+    setShowSuggestions(false);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (q.length < 1) {
+      setSuggestions([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    // Safety: Ladeindikator maximal 2s anzeigen
+    const forceStop = setTimeout(() => setIsLoading(false), 2000);
+    lastQueryRef.current = q;
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        const merged = await fetchServerAutocomplete(q);
+        if (lastQueryRef.current !== q) return; // veraltete Antwort ignorieren
+        if (merged.length > 0) {
+          setSuggestions(merged.slice(0, 12));
+          setShowSuggestions(true);
+        } else {
+          // Sofortiges Feedback bei keinen Treffern
+          setSuggestions([]);
+          setShowSuggestions(true);
+        }
+      } finally {
+        setIsLoading(false);
+        clearTimeout(forceStop);
+      }
+    }, 350);
+  };
+
+  const selectSuggestion = (s) => {
+    const address = s.address || `${s.primary}${s.secondary ? ', ' + s.secondary : ''}`;
+    setInputValue(address);
+    onChange(address);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    if (s.lat && s.lng) {
+      onPlaceSelected({ address, latitude: s.lat, longitude: s.lng });
+    }
+  };
+
+  // Entfernt: exakte Google Suche
+
+  const highlight = (text) => {
+    if (!text) return null;
+    const q = inputValue.trim();
+    if (!q) return text;
+    try {
+      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
+      const parts = text.split(regex);
+      const matches = text.match(regex);
+      if (!matches) return text;
+      const nodes = [];
+      parts.forEach((part, i) => {
+        nodes.push(part);
+        if (i < matches.length) {
+          nodes.push(<span key={i+part} className="bg-yellow-200 text-gray-900 px-0.5 rounded">{matches[i]}</span>);
+        }
+      });
+      return <>{nodes}</>;
+    } catch {
+      return text;
+    }
+  };
+
+  return (
+    <div className="relative">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="Adresse, Geschäft oder Ort eingeben..."
+        />
+      </div>
+      {isLoading && (
+        <div className="absolute right-3 top-3 text-blue-600">
+          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        </div>
+      )}
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-y-auto">
+          {suggestions.map((s) => (
+            <div key={s.id} className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0" onClick={() => selectSuggestion(s)}>
+              <div className="text-sm font-semibold text-gray-900">{highlight(s.primary)}</div>
+              {s.secondary && <div className="text-xs text-gray-600 mt-1">📍 {highlight(s.secondary)}</div>}
+              <div className="text-xs text-blue-600 mt-1">{s.source === 'google' ? '🔵 Google' : s.source === 'osm' ? '🗺️ OpenStreetMap' : '⚡ Photon'}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showSuggestions && !isLoading && suggestions.length === 0 && (
+        <div className="absolute z-40 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow p-3 text-sm text-gray-600">
+          Keine Treffer. Bitte genauer eingeben (z.B. „Name, Ort“ oder PLZ) oder auf „Suchen“ klicken.
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Meine Parkplätze Component für Owner
+const MeineParkplaetze = () => {
+  const { token } = useAuth();
+  const [parkplaetze, setParkplaetze] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingSpot, setEditingSpot] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    latitude: '',
+    longitude: '',
+    price_per_hour: '',
+    status: 'free'
+  });
+
+  useEffect(() => {
+    loadParkplaetze();
+  }, []);
+
+  const loadParkplaetze = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/owner/parking-spots`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setParkplaetze(response.data);
+    } catch (error) {
+      console.error('Fehler beim Laden der Parkplätze:', error);
+      alert('Fehler beim Laden der Parkplätze');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingSpot) {
+        await axios.put(`${API}/owner/parking-spots/${editingSpot.id}`, formData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        alert('Parkplatz erfolgreich aktualisiert!');
+      } else {
+        await axios.post(`${API}/owner/parking-spots`, formData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        alert('Parkplatz erfolgreich hinzugefügt!');
+      }
+      setShowAddForm(false);
+      setShowEditForm(false);
+      setEditingSpot(null);
+      setFormData({
+        name: '',
+        address: '',
+        latitude: '',
+        longitude: '',
+        price_per_hour: '',
+        status: 'free'
+      });
+      loadParkplaetze();
+    } catch (error) {
+      console.error('Fehler:', error);
+      alert('Fehler beim Speichern des Parkplatzes');
+    }
+  };
+
+  const handleEdit = (spot) => {
+    setEditingSpot(spot);
+    setFormData({
+      name: spot.name,
+      address: spot.address || '',
+      latitude: spot.latitude,
+      longitude: spot.longitude,
+      price_per_hour: spot.price_per_hour,
+      status: spot.status
+    });
+    setShowEditForm(true);
+  };
+
+  const handleDelete = async (spotId) => {
+    if (!window.confirm('Möchten Sie diesen Parkplatz wirklich löschen?')) return;
+    
+    try {
+      await axios.delete(`${API}/owner/parking-spots/${spotId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert('Parkplatz erfolgreich gelöscht!');
+      loadParkplaetze();
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      alert('Fehler beim Löschen des Parkplatzes');
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-64"><div className="text-lg">Lade Parkplätze...</div></div>;
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Meine Parkplätze</h1>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+        >
+          ➕ Neuer Parkplatz
+        </button>
+      </div>
+
+      {/* Add/Edit Form */}
+      {(showAddForm || showEditForm) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <h2 className="text-2xl font-bold mb-6">
+              {editingSpot ? 'Parkplatz bearbeiten' : 'Neuer Parkplatz'}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Adresse
+                  <span className="text-xs text-gray-500 ml-2">
+                    (Optional - Google Places aktiviert)
+                  </span>
+                </label>
+                <AddressAutocomplete
+                  value={formData.address}
+                  onChange={(newAddress) => setFormData({...formData, address: newAddress})}
+                  onPlaceSelected={(placeData) => {
+                    setFormData({
+                      ...formData,
+                      address: placeData.address,
+                      latitude: placeData.latitude.toString(),
+                      longitude: placeData.longitude.toString()
+                    });
+                  }}
+                />
+                <p className="text-xs text-blue-600 mt-1">
+                  💡 Vorschläge ab dem 1. Buchstaben (z.B. "B" → "Bahnhof", "Coop", "McDonald's")
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Breitengrad
+                    {formData.latitude && (
+                      <span className="text-xs text-green-600 ml-2">✓ Automatisch gesetzt</span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({...formData, latitude: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                    required
+                    placeholder="Wird automatisch gesetzt"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Längengrad
+                    {formData.longitude && (
+                      <span className="text-xs text-green-600 ml-2">✓ Automatisch gesetzt</span>
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({...formData, longitude: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                    required
+                    placeholder="Wird automatisch gesetzt"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Preis pro Stunde (CHF)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.price_per_hour}
+                  onChange={(e) => setFormData({...formData, price_per_hour: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="free">Frei</option>
+                  <option value="occupied">Belegt</option>
+                  <option value="reserved">Reserviert</option>
+                </select>
+              </div>
+              <div className="flex gap-4 mt-6">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                >
+                  {editingSpot ? 'Aktualisieren' : 'Hinzufügen'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setShowEditForm(false);
+                    setEditingSpot(null);
+                    setFormData({
+                      name: '',
+                      address: '',
+                      latitude: '',
+                      longitude: '',
+                      price_per_hour: '',
+                      status: 'free'
+                    });
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-400 transition"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Parkplätze Liste */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {parkplaetze.map(spot => (
+          <div key={spot.id} className="bg-white rounded-lg shadow-md p-6 border-2 border-blue-500">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-gray-900">{spot.name}</h3>
+              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                spot.status === 'free' ? 'bg-green-100 text-green-800' :
+                spot.status === 'occupied' ? 'bg-red-100 text-red-800' :
+                'bg-yellow-100 text-yellow-800'
+              }`}>
+                {spot.status === 'free' ? 'Frei' : spot.status === 'occupied' ? 'Belegt' : 'Reserviert'}
+              </span>
+            </div>
+            
+            {spot.address && (
+              <p className="text-gray-600 mb-2">📍 {spot.address}</p>
+            )}
+            <p className="text-gray-600 mb-2">🌍 {spot.latitude}, {spot.longitude}</p>
+            <p className="text-lg font-bold text-blue-600 mb-4">{spot.price_per_hour} CHF/h</p>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleEdit(spot)}
+                className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition text-sm"
+              >
+                ✏️ Bearbeiten
+              </button>
+              <button
+                onClick={() => handleDelete(spot.id)}
+                className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition text-sm"
+              >
+                🗑️ Löschen
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {parkplaetze.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-xl text-gray-500">Noch keine Parkplätze vorhanden</p>
+          <p className="text-gray-400 mt-2">Fügen Sie Ihren ersten Parkplatz hinzu!</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const OwnerDashboard = () => {
-  const [activeTab, setActiveTab] = useState('spots');
+  const [activeTab, setActiveTab] = useState('my-spots');
   const [spots, setSpots] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [ownerBookings, setOwnerBookings] = useState([]);
@@ -2460,6 +2950,10 @@ const OwnerDashboard = () => {
     address: '',
     hourly_rate: ''
   });
+  // Monitoring / hardware devices
+  const [ownerDevices, setOwnerDevices] = useState([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [devicesError, setDevicesError] = useState(null);
   
   // New states for enhanced functionality
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -2528,6 +3022,7 @@ const OwnerDashboard = () => {
       alert(`Device ${assignHardwareId} zugewiesen an Spot ${assignSpotId}`);
       // refresh spots/devices if needed
       loadOwnerSpots();
+      loadOwnerDevices();
     } catch (err) {
       console.error('Assign failed', err);
       setAssignStatus('error');
@@ -2546,6 +3041,16 @@ const OwnerDashboard = () => {
     }
     if (activeTab === 'revenue') {
       loadRevenueData();
+    }
+    if (activeTab === 'monitoring' && user && (user.role === 'admin' || user.role === 'owner')) {
+      // initial load
+      loadOwnerDevices();
+      // start polling every 10s while the monitoring tab is active
+      const pollInterval = setInterval(() => {
+        loadOwnerDevices();
+      }, 10000);
+
+      return () => clearInterval(pollInterval);
     }
   }, [activeTab]);
 
@@ -2593,105 +3098,84 @@ const OwnerDashboard = () => {
     setNewSpot({...newSpot, address});
     setAddressError('');
     setCoordinatesAutoFilled(false);
-    
-    if (searchAddressTimeout.current) {
-      clearTimeout(searchAddressTimeout.current);
-    }
-    
-    if (address.length < 3) {
+
+    // Früh abbrechen: leere Eingabe -> Dropdown verbergen
+    if (!address || address.trim() === '') {
       setAddressSuggestions([]);
       setShowAddressSuggestions(false);
       return;
     }
-    
+
+    // Sofort Anzeige aktivieren
+    if (!showAddressSuggestions) setShowAddressSuggestions(true);
+
+    // Vorherigen Timeout löschen
+    if (searchAddressTimeout.current) {
+      clearTimeout(searchAddressTimeout.current);
+    }
+
+    // Sehr kurze Verzögerung für flüssiges Tippen
     searchAddressTimeout.current = setTimeout(async () => {
       await searchAddress(address);
-    }, 500);
+    }, 120);
   };
+
+  const [debugAutoComplete, setDebugAutoComplete] = useState({ query:"", phase:"idle", localFirstCount:0, remoteCount:0, fallbackCount:0, finalCount:0, error:null });
 
   const searchAddress = async (query) => {
     try {
+      setDebugAutoComplete(d => ({...d, query, phase:"start", error:null }));
       setAddressLoading(true);
       setAddressError('');
+      console.log('[autocomplete] searchAddress start', { query });
       
       // First try local/fallback data for common Swiss companies
       const localResults = getLocalCompanyData(query);
-      if (localResults.length > 0) {
-        setAddressSuggestions(localResults);
-        setShowAddressSuggestions(true);
-        setAddressLoading(false);
-        return;
-      }
+      // Nicht sofort returnen – wir mergen lokale & remote Daten
+      let merged = [...localResults];
       
-      // Try external APIs with CORS proxy and error handling
+      // Try backend geo proxy instead of public CORS proxy
       try {
-        // Search for both addresses and businesses/companies
-        const searches = [
-          // Regular address search via CORS proxy
-          fetch(`https://cors-anywhere.herokuapp.com/https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=3&q=${encodeURIComponent(query + ', Switzerland')}`, {
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest'
-            }
-          }).catch(() => null),
-          
-          // Business search via CORS proxy
-          fetch(`https://cors-anywhere.herokuapp.com/https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=3&q=${encodeURIComponent(query)}&amenity=restaurant,cafe,shop,bank,hospital,pharmacy,fuel,parking,hotel,office&countrycodes=ch`, {
-            headers: {
-              'X-Requested-With': 'XMLHttpRequest'
-            }
-          }).catch(() => null)
-        ];
-        
-        const responses = await Promise.allSettled(searches);
-        let allSuggestions = [];
-        
-        // Process results if available
-        for (let i = 0; i < responses.length; i++) {
-          if (responses[i].status === 'fulfilled' && responses[i].value && responses[i].value.ok) {
+        const url = `${API}/geo/search?q=${encodeURIComponent(query)}&limit=8`;
+        console.log('[autocomplete] fetch', url);
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' }});
+        console.log('[autocomplete] response status', res.status);
+        if (res.ok) {
+          let data = [];
             try {
-              const data = await responses[i].value.json();
-              const suggestions = data.map(item => ({
-                display_name: item.display_name,
-                lat: parseFloat(item.lat),
-                lon: parseFloat(item.lon),
-                type: item.amenity || item.shop || item.type || (i === 0 ? 'address' : 'business'),
-                address: item.display_name.split(',')[0],
-                source: i === 0 ? 'address' : 'business'
-              }));
-              allSuggestions = [...allSuggestions, ...suggestions];
-            } catch (parseError) {
-              console.log('Failed to parse response', i);
+              data = await res.json();
+            } catch(parseErr){
+              console.warn('[autocomplete] json parse failed', parseErr);
             }
+          console.log('[autocomplete] data length', Array.isArray(data) ? data.length : 'not-array');
+          if (Array.isArray(data) && data.length > 0) {
+            merged = mergeSuggestionLists(merged, data);
+            setAddressSuggestions(merged.slice(0, 12));
+            setShowAddressSuggestions(merged.length > 0);
+            setDebugAutoComplete(d => ({...d, phase:"remote-hit", remoteCount:data.length, localFirstCount: localResults.length, finalCount: Math.min(merged.length,12) }));
+          } else {
+            console.log('[autocomplete] backend empty -> fallback local-extended');
+            const extendedLocalResults = getExtendedLocalData(query);
+            merged = mergeSuggestionLists(merged, extendedLocalResults);
+            setAddressSuggestions(merged.slice(0, 12));
+            setShowAddressSuggestions(merged.length > 0);
+            setDebugAutoComplete(d => ({...d, phase:"remote-empty-fallback", fallbackCount: extendedLocalResults.length, localFirstCount: localResults.length, finalCount: Math.min(merged.length,12) }));
           }
-        }
-        
-        if (allSuggestions.length > 0) {
-          // Remove duplicates and sort
-          const uniqueSuggestions = [];
-          const seen = new Set();
-          
-          for (const suggestion of allSuggestions) {
-            const key = `${suggestion.lat},${suggestion.lon}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              uniqueSuggestions.push(suggestion);
-            }
-          }
-          
-          setAddressSuggestions(uniqueSuggestions.slice(0, 8));
-          setShowAddressSuggestions(true);
         } else {
-          // Fallback to extended local data
-          const extendedLocalResults = getExtendedLocalData(query);
-          setAddressSuggestions(extendedLocalResults);
-          setShowAddressSuggestions(true);
+            console.log('[autocomplete] non-200 -> fallback local-extended', res.status);
+            const extendedLocalResults = getExtendedLocalData(query);
+            merged = mergeSuggestionLists(merged, extendedLocalResults);
+            setAddressSuggestions(merged.slice(0, 12));
+            setShowAddressSuggestions(merged.length > 0);
+            setDebugAutoComplete(d => ({...d, phase:"remote-error-status", fallbackCount: extendedLocalResults.length, localFirstCount: localResults.length, finalCount: Math.min(merged.length,12), error:`status ${res.status}` }));
         }
-        
       } catch (apiError) {
-        console.log('External APIs not available, using local data');
+        console.log('[autocomplete] fetch error -> local extended merge', apiError);
         const extendedLocalResults = getExtendedLocalData(query);
-        setAddressSuggestions(extendedLocalResults);
-        setShowAddressSuggestions(true);
+        merged = mergeSuggestionLists(merged, extendedLocalResults);
+        setAddressSuggestions(merged.slice(0, 12));
+        setShowAddressSuggestions(merged.length > 0);
+        setDebugAutoComplete(d => ({...d, phase:"remote-exception", fallbackCount: extendedLocalResults.length, localFirstCount: localResults.length, finalCount: Math.min(merged.length,12), error: apiError?.message || 'fetch error' }));
       }
       
     } catch (error) {
@@ -2699,13 +3183,18 @@ const OwnerDashboard = () => {
       // Fallback to local data even on error
       const fallbackResults = getExtendedLocalData(query);
       if (fallbackResults.length > 0) {
-        setAddressSuggestions(fallbackResults);
+        setAddressSuggestions(fallbackResults.slice(0,12));
         setShowAddressSuggestions(true);
+        console.log('[autocomplete] error fallback results', fallbackResults.length);
+        setDebugAutoComplete(d => ({...d, phase:"outer-exception", fallbackCount:fallbackResults.length, finalCount:Math.min(fallbackResults.length,12), error:error?.message || 'outer error'}));
       } else {
         setAddressError('Search temporarily unavailable. Please enter address manually.');
+        setDebugAutoComplete(d => ({...d, phase:"outer-exception-empty", finalCount:0, error:error?.message || 'outer error'}));
       }
     } finally {
       setAddressLoading(false);
+      console.log('[autocomplete] searchAddress end');
+      setDebugAutoComplete(d => ({...d, phase:"done" }));
     }
   };
 
@@ -2859,6 +3348,20 @@ const OwnerDashboard = () => {
         company_type: result.company.type,
         relevanceScore: result.score
       }));
+  };
+
+  // Merge mit Deduplikation anhand address+lat+lon
+  const mergeSuggestionLists = (baseList, extraList) => {
+    const out = [...baseList];
+    const seen = new Set(baseList.map(r => `${r.address}|${r.lat}|${r.lon}`));
+    for (const e of extraList) {
+      const key = `${e.address}|${e.lat}|${e.lon}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(e);
+      }
+    }
+    return out;
   };
 
   const getExtendedLocalData = (query) => {
@@ -3071,10 +3574,11 @@ const OwnerDashboard = () => {
 
   const loadOwnerSpots = async () => {
     try {
-      const response = await axios.get(`${API}/parking-spots`);
-      // Filter spots owned by current user
-      const ownerSpots = response.data.filter(spot => spot.owner_id === user.id);
-      setSpots(ownerSpots);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/owner/parking-spots`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSpots(response.data);
     } catch (error) {
       console.error('Error loading spots:', error);
     }
@@ -3155,6 +3659,24 @@ const OwnerDashboard = () => {
       }
     } catch (error) {
       console.error('Error loading owner reviews:', error);
+    }
+  };
+
+  const loadOwnerDevices = async () => {
+    setDevicesError(null);
+    setDevicesLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await axios.get(`${API}/api/owner/devices`, { headers });
+      // res.data.devices -> array of { hardware_id, owner_email, parking_spot_id, created_at }
+      setOwnerDevices(res.data.devices || []);
+    } catch (err) {
+      console.error('Failed to load owner devices:', err);
+      setDevicesError(err?.response?.data || err.message || 'Error');
+      setOwnerDevices([]);
+    } finally {
+      setDevicesLoading(false);
     }
   };
 
@@ -3347,20 +3869,30 @@ const OwnerDashboard = () => {
           </div>
           
           {/* Tab Navigation */}
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('my-spots')}
+              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
+                activeTab === 'my-spots'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              🅿️ Meine Parkplätze
+            </button>
             <button
               onClick={() => setActiveTab('spots')}
-              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'spots'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              🗺️ Meine Parking Spots
+              🗺️ Parking Spots Map
             </button>
             <button
               onClick={() => setActiveTab('bookings')}
-              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'bookings'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -3370,7 +3902,7 @@ const OwnerDashboard = () => {
             </button>
             <button
               onClick={() => setActiveTab('reviews')}
-              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'reviews'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -3380,7 +3912,7 @@ const OwnerDashboard = () => {
             </button>
             <button
               onClick={() => setActiveTab('revenue')}
-              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'revenue'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -3388,9 +3920,21 @@ const OwnerDashboard = () => {
             >
               💰 Einnahmen
             </button>
+            {user && (user.role === 'admin' || user.role === 'owner') && (
+              <button
+                onClick={() => setActiveTab('monitoring')}
+                className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
+                  activeTab === 'monitoring'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📡 Geräte
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('account')}
-              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+              className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'account'
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -3461,7 +4005,7 @@ const OwnerDashboard = () => {
       {/* Add Spot Modal */}
       {showAddSpot && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-visible">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Add New Parking Spot</h2>
             
             <form onSubmit={handleAddSpot} className="space-y-4">
@@ -3485,7 +4029,14 @@ const OwnerDashboard = () => {
                     type="text"
                     value={newSpot.address}
                     onChange={(e) => handleAddressChange(e.target.value)}
-                    onFocus={() => setShowAddressSuggestions(true)}
+                    onFocus={() => {
+                      setShowAddressSuggestions(true);
+                      if (newSpot.address && newSpot.address.length >= 2) {
+                        // trigger search immediately on focus if user already typed something
+                        if (searchAddressTimeout.current) clearTimeout(searchAddressTimeout.current);
+                        searchAddress(newSpot.address);
+                      }
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="Address, company name, or landmark (e.g., 'McDonald's Zurich', 'ETH Zurich', 'Bahnhofstrasse 1')"
                     required
@@ -3508,8 +4059,14 @@ const OwnerDashboard = () => {
                   </div>
                   
                   {/* Address Suggestions Dropdown */}
-                  {showAddressSuggestions && addressSuggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {showAddressSuggestions && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {addressLoading && (
+                        <div className="px-4 py-3 text-sm text-gray-600">Searching…</div>
+                      )}
+                      {!addressLoading && addressSuggestions.length === 0 && newSpot.address && newSpot.address.length >= 2 && (
+                        <div className="px-4 py-3 text-sm text-gray-600">Keine Treffer. Bitte genauer tippen.</div>
+                      )}
                       {addressSuggestions.map((suggestion, index) => (
                         <div
                           key={index}
@@ -3550,6 +4107,16 @@ const OwnerDashboard = () => {
                           )}
                         </div>
                       ))}
+                      {/* Debug panel inline (temporary) */}
+                      <div className="px-4 py-2 text-xs text-gray-500 bg-gray-50 border-t border-gray-200">
+                        <div>Phase: {debugAutoComplete.phase}</div>
+                        <div>Query: {debugAutoComplete.query}</div>
+                        <div>Local first: {debugAutoComplete.localFirstCount}</div>
+                        <div>Remote count: {debugAutoComplete.remoteCount}</div>
+                        <div>Fallback count: {debugAutoComplete.fallbackCount}</div>
+                        <div>Final count: {debugAutoComplete.finalCount}</div>
+                        {debugAutoComplete.error && <div className="text-red-600">Error: {debugAutoComplete.error}</div>}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -3910,6 +4477,8 @@ const OwnerDashboard = () => {
 
       {/* Tab Content */}
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {activeTab === 'my-spots' && <MeineParkplaetze />}
+        
         {activeTab === 'spots' && (
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-6">🗺️ Meine Parking Spots ({spots.length})</h2>
@@ -4163,6 +4732,97 @@ const OwnerDashboard = () => {
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+  {activeTab === 'monitoring' && user && (user.role === 'admin' || user.role === 'owner') && (
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">📡 Meine Geräte ({ownerDevices.length})</h2>
+
+            <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-600">Deine zugewiesenen Hardware-Geräte</p>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => loadOwnerDevices()}
+                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                  >
+                    Aktualisieren
+                  </button>
+                  <span className="text-xs text-gray-500">{devicesLoading ? 'Lade…' : devicesError ? `Fehler: ${String(devicesError)}` : ''}</span>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ownerDevices.length === 0 && !devicesLoading && (
+                  <div className="col-span-full text-sm text-gray-500">Keine Geräte gefunden</div>
+                )}
+
+                {ownerDevices.map((d) => (
+                  <div key={d.hardware_id} className="p-4 border rounded-md bg-gray-50">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-gray-900">{d.hardware_id}</p>
+                        <p className="text-xs text-gray-600">Parkplatz-ID: {d.parking_spot_id || '—'}</p>
+                        <p className="text-xs text-gray-500">Registriert: {d.created_at}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await axios.get(`${API}/api/hardware/${d.hardware_id}/commands`);
+                              const cmds = res.data.commands || [];
+                              if (cmds.length === 0) {
+                                alert('Keine wartenden Befehle');
+                              } else {
+                                alert('Wartende Befehle:\n' + cmds.map(c=>`${c.id} ${c.command} ${JSON.stringify(c.parameters||{})}`).join('\n'));
+                              }
+                            } catch (e) {
+                              console.error('Failed to fetch commands:', e);
+                              alert('Fehler beim Abrufen von Befehlen');
+                            }
+                          }}
+                          className="px-2 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300"
+                        >
+                          Befehle anzeigen
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Telemetry display */}
+                    {d.telemetry ? (
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-700">
+                        <div>
+                          <div className="text-xs text-gray-500">Zuletzt gesehen</div>
+                          <div className="font-medium">{d.telemetry.last_heartbeat ? new Date(d.telemetry.last_heartbeat).toLocaleString() : '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">Belegung</div>
+                          <div className={`font-medium ${d.telemetry.occupancy === 'occupied' ? 'text-red-600' : 'text-green-600'}`}>{d.telemetry.occupancy || '—'}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs text-gray-500">Batterie (V)</div>
+                          <div className="font-medium">{d.telemetry.battery_level != null ? d.telemetry.battery_level.toFixed ? d.telemetry.battery_level.toFixed(2) : d.telemetry.battery_level : '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-500">RSSI (dBm)</div>
+                          <div className="font-medium">{d.telemetry.rssi != null ? d.telemetry.rssi : '—'}</div>
+                        </div>
+
+                        <div className="col-span-2">
+                          <div className="text-xs text-gray-500">Mag (x,y,z)</div>
+                          <div className="font-mono text-sm text-gray-700">{d.telemetry.last_mag ? `${d.telemetry.last_mag.x ?? '—'}, ${d.telemetry.last_mag.y ?? '—'}, ${d.telemetry.last_mag.z ?? '—'}` : '—'}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-sm text-gray-500">No telemetry available</div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -5947,9 +6607,49 @@ const PaymentSuccess = () => {
   );
 };
 
+// Public confirmation page shown after successful email verification
+const EmailVerified = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
+        <div className="mb-6">
+          <svg className="w-16 h-16 mx-auto text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">E-Mail verifiziert!</h1>
+        <p className="text-gray-600 mb-8">Ihr Konto wurde erfolgreich aktiviert. Sie können sich jetzt anmelden.</p>
+        <button onClick={() => window.location.href = '/'} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">Zum Login</button>
+      </div>
+    </div>
+  );
+};
+
+// Small floating version badge that fetches /version.txt and shows short SHA
+const VersionBadge = () => {
+  const [ver, setVer] = useState('');
+  useEffect(() => {
+    fetch('/version.txt', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((t) => setVer((t || '').trim()))
+      .catch(() => {});
+  }, []);
+  if (!ver) return null;
+  const short = ver.slice(0, 7);
+  return (
+    <div className="fixed bottom-2 left-2 z-50 text-xs px-2 py-1 rounded bg-black/70 text-white">
+      build {short}
+    </div>
+  );
+};
+
 const App = () => {
   const [showLogin, setShowLogin] = useState(true);
   const { user, logout, isAuthenticated } = useAuth();
+
+  // Handle email verification route
+  const currentPath = window.location.pathname;
+  if (currentPath === '/email-verified') {
+    return <EmailVerified />;
+  }
 
   if (!isAuthenticated) {
     return showLogin 
@@ -5958,8 +6658,6 @@ const App = () => {
   }
 
   // Handle routing
-  const currentPath = window.location.pathname;
-  
   if (currentPath === '/payment-success') {
     return <PaymentSuccess />;
   }
@@ -5982,9 +6680,12 @@ const App = () => {
 
 const AppWrapper = () => {
   return (
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+      <VersionBadge />
+    </>
   );
 };
 

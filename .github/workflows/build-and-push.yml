@@ -43,6 +43,8 @@ jobs:
         with:
           context: .
           file: ./frontend/Dockerfile
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/parking-frontend:latest

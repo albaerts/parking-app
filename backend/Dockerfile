@@ -21,14 +21,15 @@ RUN apt-get update \
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Accept commit SHA build arg to expose version info inside the container
-ARG COMMIT_SHA=unknown
-ENV BACKEND_COMMIT_SHA=${COMMIT_SHA}
-RUN echo "${COMMIT_SHA}" > /app/backend/version.txt
-
 # Copy application code into a package folder so imports like `backend.server_gashis` work
 RUN mkdir -p /app/backend
 COPY backend/ /app/backend/
+
+# Accept commit SHA build arg to expose version info inside the container
+ARG COMMIT_SHA=unknown
+ENV BACKEND_COMMIT_SHA=${COMMIT_SHA}
+# Write version file after code copy so the path exists
+RUN echo "${COMMIT_SHA}" > /app/backend/version.txt || true
 
 # Ensure the appuser will own the backend files so runtime writes (sqlite journals etc.) succeed
 RUN chown -R appuser:appuser /app/backend || true

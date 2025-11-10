@@ -67,6 +67,9 @@ jobs:
           script: |
             set -euxo pipefail
 
+            # Ensure IMAGE_TAG is defined (use current commit SHA)
+            IMAGE_TAG='${{ github.sha }}'
+
             REMOTE_PATH="${{ secrets.DEPLOY_REMOTE_PATH }}"
             if [ -z "${REMOTE_PATH}" ]; then
               REMOTE_PATH="/var/www/parkingsrv"
@@ -75,9 +78,9 @@ jobs:
 
             echo "=== Checking port bindings for 80/443 on host (to detect legacy nginx) ==="
             if command -v ss >/dev/null 2>&1; then
-              ss -ltnp | (grep -E ":[8]{2}(0|43)\s" || true)
+              ss -ltnp | (grep -E ":((80)|(443))\s" || true)
             else
-              netstat -ltnp 2>/dev/null | (grep -E ":[8]{2}(0|43)\s" || true) || true
+              netstat -ltnp 2>/dev/null | (grep -E ":((80)|(443))\s" || true) || true
             fi
 
             # If legacy host nginx is active (binding 80/443), stop it to free the ports for the proxy container
@@ -112,10 +115,12 @@ jobs:
 
             echo "Running deploy/update.sh with image tag $IMAGE_TAG"
             chmod +x ./deploy/update.sh || true
-            IMAGE_TAG='${{ github.sha }}' ./deploy/update.sh '${{ github.sha }}'
+            IMAGE_TAG="$IMAGE_TAG" ./deploy/update.sh "$IMAGE_TAG"
 
             echo "=== Docker processes after compose up ==="
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+            echo "=== Listing deploy directory for diagnostics ==="
+            ls -la ./deploy || true
 
             # Run DB migration helper if present
             if [ -f ./deploy/migrate_db.sh ]; then

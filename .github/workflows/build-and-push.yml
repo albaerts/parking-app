@@ -95,6 +95,42 @@ jobs:
               fi
             fi
 
+            echo "=== Listing /var/www to check for legacy paths ==="
+            ls -la /var/www || true
+
+            echo "=== Attempting to stop legacy compose stack in /var/www/parking if present ==="
+            if [ -d "/var/www/parking" ]; then
+              LEGACY_DIR="/var/www/parking"
+              # Detect docker-compose vs docker compose
+              if command -v docker-compose >/dev/null 2>&1; then
+                DC="docker-compose"
+              elif docker compose version >/dev/null 2>&1; then
+                DC="docker compose"
+              else
+                DC=""
+              fi
+              if [ -n "$DC" ]; then
+                # Choose a compose file if available, default to docker-compose.yml
+                LEGACY_COMPOSE_FILE=""
+                for f in docker-compose.prod.yml docker-compose.yml docker-compose.yaml; do
+                  if [ -f "$LEGACY_DIR/$f" ]; then
+                    LEGACY_COMPOSE_FILE="$f"
+                    break
+                  fi
+                done
+                if [ -n "$LEGACY_COMPOSE_FILE" ]; then
+                  echo "Stopping legacy stack at $LEGACY_DIR using $LEGACY_COMPOSE_FILE"
+                  (cd "$LEGACY_DIR" && $DC -f "$LEGACY_COMPOSE_FILE" down --remove-orphans) || true
+                else
+                  echo "No compose file found in $LEGACY_DIR — skipping down"
+                fi
+              else
+                echo "No docker compose CLI found on host to stop legacy stack — skipping"
+              fi
+            else
+              echo "/var/www/parking does not exist — no legacy stack there"
+            fi
+
             # If a GHCR token is provided, login so docker pull can authenticate (optional)
             if [ -n "${GHCR_PAT:-}" ]; then
               echo "Logging into ghcr.io"
@@ -121,6 +157,8 @@ jobs:
 
             echo "=== Docker processes after compose up ==="
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+            echo "=== Docker images for parking-* (top 10) ==="
+            docker images | grep -E 'parking-(frontend|backend)' | head -n 10 || true
             echo "=== Listing deploy directory for diagnostics ==="
             ls -la ./deploy || true
             echo "=== Proxy container logs (first 40 lines) ==="
@@ -136,6 +174,29 @@ jobs:
                 docker rm tmp_fe_export || true
                 echo "Fallback static files exported to /var/www/parking_fallback (not served unless host nginx re-enabled)."
               fi
+            fi
+
+            echo "=== Frontend index.html hash from image vs running container ==="
+            # Extract index.html from the exact image tag
+            docker create --name fe_tmp ghcr.io/${{ github.repository_owner }}/parking-frontend:$IMAGE_TAG || true
+            if docker ps -a -q -f name=fe_tmp >/dev/null 2>&1; then
+              docker cp fe_tmp:/usr/share/nginx/html/index.html /tmp/index_from_image.html || true
+              docker rm fe_tmp || true
+              if [ -f /tmp/index_from_image.html ]; then
+                echo "Image index.html sha256:"
+                sha256sum /tmp/index_from_image.html || true
+              else
+                echo "Failed to copy index.html from image"
+              fi
+            fi
+
+            if docker ps -q -f name=parking_frontend >/dev/null 2>&1; then
+              echo "Running container index.html sha256:"
+              docker exec parking_frontend sha256sum /usr/share/nginx/html/index.html || true
+              echo "Writing version marker to running frontend container..."
+              docker exec parking_frontend /bin/sh -c "echo '${{ github.sha }}' > /usr/share/nginx/html/version.txt" || true
+            else
+              echo "parking_frontend container not running — cannot compute hash or write version marker"
             fi
 
             # Run DB migration helper if present
@@ -165,6 +226,19 @@ jobs:
                 exit 3
               fi
               rm -f "$TMPFILE"
+
+              echo "Checking live version marker..."
+              LIVE_VER=$(curl -sS https://parking.gashis.ch/version.txt || true)
+              echo "live_version_marker=$LIVE_VER"
+              if [ -n "$LIVE_VER" ]; then
+                if [ "$LIVE_VER" = "${{ github.sha }}" ]; then
+                  echo "Live version marker matches current commit"
+                else
+                  echo "Live version marker does not match current commit: $LIVE_VER" >&2
+                fi
+              else
+                echo "No live version marker available (first deploy with marker?)"
+              fi
             else
               echo "curl not available on remote host — skipping public site check"
             fi

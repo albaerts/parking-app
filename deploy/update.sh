@@ -158,6 +158,14 @@ if [ -x ./deploy/check_health_fixed.sh ]; then
 	if ./deploy/check_health_fixed.sh "http://127.0.0.1:8000/health" 15 2; then
 		echo "Health check passed"
 	else
+		echo "Health check FAILED. Collecting backend logs before exit..." >&2
+		docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+		if docker ps -q -f name=parking_backend >/dev/null 2>&1; then
+			echo "=== Last 200 lines of parking_backend logs ===" >&2
+			docker logs --tail 200 parking_backend >&2 || true
+		else
+			echo "parking_backend container not running" >&2
+		fi
 		echo "Health check FAILED. Please check logs and consider rollback." >&2
 		exit 2
 	fi
@@ -166,6 +174,14 @@ elif [ -x ./deploy/check_health.sh ]; then
 	if ./deploy/check_health.sh "http://127.0.0.1:8000/health" 15 2; then
 		echo "Health check passed"
 	else
+		echo "Health check FAILED. Collecting backend logs before exit..." >&2
+		docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+		if docker ps -q -f name=parking_backend >/dev/null 2>&1; then
+			echo "=== Last 200 lines of parking_backend logs ===" >&2
+			docker logs --tail 200 parking_backend >&2 || true
+		else
+			echo "parking_backend container not running" >&2
+		fi
 		echo "Health check FAILED. Please check logs and consider rollback." >&2
 		exit 2
 	fi

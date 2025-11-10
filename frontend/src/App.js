@@ -124,11 +124,12 @@ const AuthProvider = ({ children }) => {
       setUser(userData);
       localStorage.setItem('token', token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      return true;
+      return { success: true };
     } catch (error) {
-      console.error('Login failed:', error);
-      console.error('Error details:', error.response?.data);
-      return false;
+      const code = error.response?.status;
+      const detail = error.response?.data?.detail || 'Login failed. Please try again.';
+      console.error('Login failed:', code, detail);
+      return { success: false, code, detail };
     }
   };
 
@@ -450,10 +451,16 @@ const Login = ({ onSwitchToRegister }) => {
     e.preventDefault();
     setLoading(true);
     console.log('Calling login function...');
-    const success = await login(email, password);
-    console.log('Login result:', success);
-    if (!success) {
-      alert('Login failed. Please check your credentials.');
+    const result = await login(email, password);
+    console.log('Login result:', result);
+    if (!result?.success) {
+      if (result?.code === 403) {
+        alert('Account not verified. Please check your email for the verification link.');
+      } else if (result?.code === 401) {
+        alert('Invalid email or password.');
+      } else {
+        alert(result?.detail || 'Login failed. Please try again.');
+      }
     }
     setLoading(false);
   };

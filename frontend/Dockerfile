@@ -13,6 +13,8 @@ RUN npm run build
 # Production stage
 FROM nginx:stable-alpine
 COPY --from=build /app/build /usr/share/nginx/html
+# Use custom nginx config to control caching (no-cache for index.html, long cache for assets)
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 # Bake commit version marker into the image for easy verification
 ARG COMMIT_SHA=dev
 RUN echo "$COMMIT_SHA" > /usr/share/nginx/html/version.txt

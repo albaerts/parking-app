@@ -7,6 +7,16 @@ set -euo pipefail
 IMAGE_TAG=${1:-latest}
 COMPOSE_FILE=${COMPOSE_FILE:-docker-compose.prod.yml}
 
+# Detect docker-compose CLI (v1) vs docker compose (v2 plugin)
+if command -v docker-compose >/dev/null 2>&1; then
+	DC="docker-compose"
+elif docker compose version >/dev/null 2>&1; then
+	DC="docker compose"
+else
+	echo "Error: neither docker-compose nor docker compose is available on the host." >&2
+	exit 1
+fi
+
 echo "Deploying images with tag: ${IMAGE_TAG} using compose file ${COMPOSE_FILE}"
 
 # Export variables so docker-compose file can use them
@@ -39,15 +49,15 @@ docker pull ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}
 # Run DB migrations: prefer running inside the backend container (so Python deps from the image are available)
 echo "Attempting to run migrations inside backend container (docker-compose run)"
 set +e
-if docker-compose -f ${COMPOSE_FILE} config --services | grep -q '^backend$'; then
+if $DC -f ${COMPOSE_FILE} config --services | grep -q '^backend$'; then
 	# Try Alembic inside container first
 	echo "Running Alembic upgrade head inside backend container (preferred)..."
-	if docker-compose -f ${COMPOSE_FILE} run --rm backend python3 -m alembic -c backend/alembic.ini upgrade head; then
+	if $DC -f ${COMPOSE_FILE} run --rm backend python3 -m alembic -c backend/alembic.ini upgrade head; then
 		echo "Alembic migrations applied inside container"
 	else
 		echo "Alembic inside container failed — trying SQLAlchemy create_all inside container"
 		# Attempt a safe in-container schema patch: add missing columns to existing SQLite users table
-		if docker-compose -f ${COMPOSE_FILE} run --rm backend python3 -c "import sqlite3,sys; p='/app/backend/parking.db'; conn=sqlite3.connect(p); c=conn.cursor(); cols=[r[1] for r in c.execute('PRAGMA table_info(users)')];\
+		if $DC -f ${COMPOSE_FILE} run --rm backend python3 -c "import sqlite3,sys; p='/app/backend/parking.db'; conn=sqlite3.connect(p); c=conn.cursor(); cols=[r[1] for r in c.execute('PRAGMA table_info(users)')];\
 \
 if 'password_hash' not in cols: c.execute(\"ALTER TABLE users ADD COLUMN password_hash TEXT\");\
 if 'role' not in cols: c.execute(\"ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'\");\
@@ -69,8 +79,8 @@ fi
 set -e
 
 # Ensure any previous stack is stopped/removed to avoid container rename conflicts
-echo "Stopping any existing compose stack (safe): docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true"
-docker-compose -f ${COMPOSE_FILE} down --remove-orphans || true
+echo "Stopping any existing compose stack (safe): $DC -f ${COMPOSE_FILE} down --remove-orphans || true"
+$DC -f ${COMPOSE_FILE} down --remove-orphans || true
 
 # Compose creates a default network named <project>_default when no explicit
 # network name is provided. In some environments duplicate networks with the
@@ -100,13 +110,13 @@ if [ -n "${net_ids}" ]; then
 fi
 
 # Recreate stack (with a safe retry if a rename/conflict error occurs)
-echo "Starting compose stack: docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate"
-if docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then
+echo "Starting compose stack: $DC -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate"
+if $DC -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then
 	echo "Compose up succeeded"
 else
 	echo "docker-compose up failed — attempting to resolve potential name conflicts by removing containers matching service names"
 	# Attempt to remove containers that contain the service name (aggressive but useful for stale containers)
-	for svc in $(docker-compose -f ${COMPOSE_FILE} config --services 2>/dev/null || true); do
+	for svc in $($DC -f ${COMPOSE_FILE} config --services 2>/dev/null || true); do
 		if [ -z "${svc}" ]; then
 			continue
 		fi
@@ -119,7 +129,7 @@ else
 	done
 
 	echo "Retrying docker-compose up once more"
-	if docker-compose -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then
+	if $DC -f ${COMPOSE_FILE} up -d --remove-orphans --force-recreate; then
 		echo "Compose up succeeded on retry"
 	else
 		echo "Compose up still failed after retry. Showing docker ps -a for diagnostics:" >&2

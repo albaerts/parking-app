@@ -142,6 +142,26 @@ jobs:
               echo "No GHCR_PAT provided — assuming images are public or host is already logged in"
             fi
 
+            echo "=== Aggressive cleanup of old containers/images before deploy ==="
+            OLD_CONTAINERS="parking_frontend parking_proxy parking_backend"
+            for c in $OLD_CONTAINERS; do
+              if docker ps -a -q -f name=$c >/dev/null 2>&1; then
+                echo "Removing old container: $c"
+                docker rm -f $c || true
+              fi
+            done
+            echo "Listing existing parking images before removal:"
+            docker images | grep -E 'parking-(frontend|backend)' || true
+            # Remove dangling previous latest (ignore errors)
+            for img in frontend backend; do
+              echo "Attempting to remove old image tag (latest) for $img to force fresh pull"
+              docker image rm ghcr.io/${{ github.repository_owner }}/parking-$img:latest || true
+            done
+            echo "Attempting to remove old image tag (commit) for frontend if present"
+            docker image rm ghcr.io/${{ github.repository_owner }}/parking-frontend:$IMAGE_TAG || true
+            echo "Image list after attempted removals:"
+            docker images | grep -E 'parking-(frontend|backend)' || true
+
             echo "Fetching latest repo and preparing deploy branch"
             if [ -d .git ]; then
               git fetch origin || true
@@ -238,6 +258,12 @@ jobs:
                   echo "Live version marker matches current commit"
                 else
                   echo "Live version marker does not match current commit: $LIVE_VER" >&2
+                  echo "Diagnosing: retrieving current running container index.html first 120 chars" >&2
+                  if docker ps -q -f name=parking_frontend >/dev/null 2>&1; then
+                    docker exec parking_frontend head -c 120 /usr/share/nginx/html/index.html >&2 || true
+                  fi
+                  echo "Attempting direct curl with cache bust (query param)" >&2
+                  curl -sS "https://parking.gashis.ch/version.txt?cb=$RANDOM" >&2 || true
                 fi
               else
                 echo "No live version marker available (first deploy with marker?)"

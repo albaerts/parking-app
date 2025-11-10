@@ -86,8 +86,10 @@ jobs:
             # If legacy host nginx is active (binding 80/443), stop it to free the ports for the proxy container
             if command -v systemctl >/dev/null 2>&1; then
               if systemctl is-active --quiet nginx; then
-                echo "Host nginx is active — stopping to free ports 80/443 for docker proxy"
+                echo "Host nginx is active — stopping & disabling to free ports 80/443 for docker proxy"
                 systemctl stop nginx || true
+                systemctl disable nginx || true
+                systemctl mask nginx || true
               else
                 echo "Host nginx is not active"
               fi
@@ -121,6 +123,20 @@ jobs:
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
             echo "=== Listing deploy directory for diagnostics ==="
             ls -la ./deploy || true
+            echo "=== Proxy container logs (first 40 lines) ==="
+            if docker ps -q -f name=parking_proxy >/dev/null 2>&1; then
+              docker logs --tail 40 parking_proxy || true
+            else
+              echo "parking_proxy container not running; attempting fallback static export to host nginx path (if nginx masked this will be skipped)."
+              # Fallback: extract static frontend build for manual verification
+              mkdir -p /var/www/parking_fallback
+              docker create --name tmp_fe_export ghcr.io/${{ github.repository_owner }}/parking-frontend:$IMAGE_TAG || true
+              if docker ps -a -q -f name=tmp_fe_export >/dev/null 2>&1; then
+                docker cp tmp_fe_export:/usr/share/nginx/html/. /var/www/parking_fallback/ || true
+                docker rm tmp_fe_export || true
+                echo "Fallback static files exported to /var/www/parking_fallback (not served unless host nginx re-enabled)."
+              fi
+            fi
 
             # Run DB migration helper if present
             if [ -f ./deploy/migrate_db.sh ]; then

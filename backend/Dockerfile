@@ -32,14 +32,13 @@ ENV BACKEND_COMMIT_SHA=${COMMIT_SHA}
 # Write version file after code copy so the path exists
 RUN echo "${COMMIT_SHA}" > /app/backend/version.txt || true
 
-# Ensure the appuser will own the backend files so runtime writes (sqlite journals etc.) succeed
-RUN chown -R appuser:appuser /app/backend || true
+# Run as non-root and ensure proper ownership for runtime writes (e.g. sqlite journals)
+RUN useradd --create-home appuser
+RUN chown -R appuser:appuser /app/backend
 
 # Expose port
 EXPOSE 8000
 
-# Run as non-root
-RUN useradd --create-home appuser || true
 USER appuser
 
 CMD ["uvicorn", "backend.server_gashis:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

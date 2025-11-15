@@ -48,6 +48,25 @@ Check:
 curl -s https://api.gashis.ch/api/health | jq
 ```
 
+### Alternative: eigener Hostname für die API (api.gashis.ch)
+
+Wenn dein Proxy aktuell nur `parking.gashis.ch` bedient (und `/api` dorthin proxyt), kannst du zusätzlich einen dedizierten Hostnamen `api.gashis.ch` aktivieren. Vorteil: direkte API-URL ohne `/api`-Prefix; sauberere Trennung von Web-App und API.
+
+Vorgehen auf dem Server:
+
+```
+sudo cp <REPO>/deploy/nginx.api.example.conf /etc/nginx/sites-available/api.gashis.ch
+sudo ln -s /etc/nginx/sites-available/api.gashis.ch /etc/nginx/sites-enabled/api.gashis.ch
+sudo nginx -t && sudo systemctl reload nginx
+# Erstes Zertifikat holen (falls nicht vorhanden):
+sudo certbot --nginx -d api.gashis.ch --redirect -m <deine_email> --agree-tos -n
+```
+
+Hinweise:
+- Die Datei `deploy/nginx.api.example.conf` ist ein Template und verweist auf den Backend-Container `backend:8000`.
+- Stelle sicher, dass `/etc/letsencrypt` in den Proxy-Container gemountet wird (siehe `docker-compose.prod.yml`).
+- Du kannst beide Hostnamen parallel betreiben: `parking.gashis.ch` (Web-App) und `api.gashis.ch` (API).
+
 ## 2) Frontend deployen (parking.gashis.ch/parking/)
 Ohne Codeänderung wird das Frontend unter `/parking/` ausgeliefert (zu deiner aktuellen `homepage: "/parking"`).
 

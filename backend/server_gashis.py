@@ -6,7 +6,19 @@ import sqlite3
 import json
 import os
 from datetime import datetime, timedelta
-from backend import auth, graph_mailer
+from backend import auth
+"""Optional import of graph_mailer.
+If dependencies (httpx/msal) are missing or the module errors at import time,
+we degrade gracefully so the API can still start and /health works.
+"""
+try:
+    from backend import graph_mailer  # type: ignore
+except Exception as e:  # broad: any import/init failure
+    class _GraphMailerStub:
+        async def send_verification_email(self, recipient_email: str, verification_link: str):
+            print(f"[graph_mailer:stub] Email disabled (import failed: {e}); would send to {recipient_email} link={verification_link}")
+
+    graph_mailer = _GraphMailerStub()  # type: ignore
 import secrets
 from starlette.responses import RedirectResponse
 from sqlalchemy.orm import Session

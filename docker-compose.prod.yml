@@ -4,19 +4,33 @@ services:
   backend:
     image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-yourorg}/parking-backend:${IMAGE_TAG:-latest}
     container_name: parking_backend
-    volumes:
-      # mount the whole backend dir so the container user can create sqlite journal files
-      - ./backend:/app/backend
+    # Do NOT mount ./backend in production; it overrides packaged code and can hide installed deps.
+    # SQLite writes are permitted because the image sets correct ownership for /app/backend.
     environment:
       - PYTHONUNBUFFERED=1
       # Production secrets: set JWT_SECRET and optionally DATABASE_URL in the host environment
       - JWT_SECRET=${JWT_SECRET}
       - DATABASE_URL=${DATABASE_URL}
+      # Microsoft Graph email settings (required for registration verification emails)
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - MAIL_FROM=${MAIL_FROM}
+      # Optional: keep false in production to enforce real email verification
+      - AUTO_VERIFY_ON_EMAIL_FAILURE=${AUTO_VERIFY_ON_EMAIL_FAILURE:false}
+      # Allow login without email verification (for tests/staging only)
+      - ALLOW_UNVERIFIED_LOGIN=${ALLOW_UNVERIFIED_LOGIN:false}
     ports:
       - "8000:8000"
     restart: always
     depends_on:
       - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   frontend:
     image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-yourorg}/parking-frontend:${IMAGE_TAG:-latest}
@@ -39,6 +53,12 @@ services:
       - frontend
       - backend
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   postgres:
     image: postgres:15-alpine
@@ -50,6 +70,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-parking} -d ${POSTGRES_DB:-parkingdb} || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   pgdata:

@@ -28,4 +28,11 @@ typer>=0.9.0
 # Database migrations
 alembic>=1.11.0
 # Custom integrations
-psycopg2-binary>=2.9.6
+
+# Password hashing
+bcrypt>=4.0.1
+
+# Microsoft Graph auth client (for email_service)
+msal>=1.29.0
+fastapi-mail>=1.4.1
+httpx>=0.27.0

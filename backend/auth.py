@@ -6,7 +6,20 @@ from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, create_engine, Boolean, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import bcrypt
+"""Auth/Hilfsfunktionen mit Fallback für fehlendes bcrypt.
+
+Wenn das native 'bcrypt' Modul im Container fehlt (z.B. Build-Probleme,
+Volume-Mount überschreibt Layer), schalten wir auf passlib's bcrypt-Hash
+um. Dadurch bleibt Login funktionsfähig und neue Passwörter werden mit
+einem sicheren Bcrypt-Algorithmus gehasht – auch wenn das C-Modul fehlt.
+"""
+try:
+    import bcrypt  # bevorzugt (C Implementierung)
+    _BCRYPT_NATIVE = True
+except ImportError:  # Fallback: passlib
+    from passlib.hash import bcrypt as passlib_bcrypt
+    bcrypt = None
+    _BCRYPT_NATIVE = False
 import jwt
 import secrets
 
@@ -63,13 +76,19 @@ def get_user_by_verification_token(db, token: str) -> Optional[User]:
 
 
 def create_user(db, name: str, email: str, password: str, role: str = "user") -> User:
-    # Hash password using bcrypt directly
+    """Erstellt einen neuen Benutzer und hasht Passwort mit Bcrypt.
+
+    Nutzt native bcrypt wenn verfügbar, sonst passlib Fallback.
+    """
     hashed = None
     if password:
-        # Truncate to 72 chars (bcrypt limitation)
         if len(password) > 72:
             password = password[:72]
-        hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        if _BCRYPT_NATIVE:
+            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        else:
+            # passlib erzeugt direkt einen String mit Präfix $2b$/... kompatibel
+            hashed = passlib_bcrypt.using(rounds=12).hash(password)
 
     verification_token = secrets.token_urlsafe(32)
 
@@ -101,10 +120,13 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         # Bcrypt prefix detection
         if hashed.startswith("$2a$") or hashed.startswith("$2b$") or hashed.startswith("$2y$"):
-            # Truncate password to 72 characters for bcrypt
             if len(plain) > 72:
                 plain = plain[:72]
-            return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+            if _BCRYPT_NATIVE:
+                return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+            else:
+                # passlib verify
+                return passlib_bcrypt.verify(plain, hashed)
         # Legacy fallback
         return _legacy_sha256(plain) == hashed
     except Exception:
@@ -137,11 +159,12 @@ def authenticate_user(db, email: str, password: str) -> Optional[User]:
     ok = False
     try:
         if legacy_hash.startswith("$2a$") or legacy_hash.startswith("$2b$") or legacy_hash.startswith("$2y$"):
-            # bcrypt from PHP password_hash
             test_plain = password[:72] if len(password) > 72 else password
-            ok = bcrypt.checkpw(test_plain.encode("utf-8"), legacy_hash.encode("utf-8"))
+            if _BCRYPT_NATIVE:
+                ok = bcrypt.checkpw(test_plain.encode("utf-8"), legacy_hash.encode("utf-8"))
+            else:
+                ok = passlib_bcrypt.verify(test_plain, legacy_hash)
         elif len(legacy_hash) == 64:
-            # likely sha256 hex
             ok = _legacy_sha256(password) == legacy_hash
     except Exception:
         ok = False
@@ -152,13 +175,14 @@ def authenticate_user(db, email: str, password: str) -> Optional[User]:
     # Upgrade path: store a fresh bcrypt hash in password_hash for future logins
     try:
         upgrade_plain = password[:72] if len(password) > 72 else password
-        new_hash = bcrypt.hashpw(upgrade_plain.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-        # Update ORM object and persist
+        if _BCRYPT_NATIVE:
+            new_hash = bcrypt.hashpw(upgrade_plain.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        else:
+            new_hash = passlib_bcrypt.using(rounds=12).hash(upgrade_plain)
         user.password_hash = new_hash
         db.add(user)
         db.commit()
     except Exception:
-        # If upgrade fails, still allow current login
         db.rollback()
 
     return user

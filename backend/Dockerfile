@@ -19,7 +19,8 @@ RUN apt-get update \
 
 # Copy requirements and install
 COPY backend/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt \
+    && pip install --no-cache-dir bcrypt || echo "[WARN] bcrypt extra install failed – passlib fallback active"
 
 # Copy application code into a package folder so imports like `backend.server_gashis` work
 RUN mkdir -p /app/backend

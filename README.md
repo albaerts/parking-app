@@ -39,13 +39,45 @@ Für Tests mit Geräten (ESP32/LTE) kann das Backend via Cloudflare Quick Tunnel
 
 ## Weitere Dokumente
 
-- Einkaufslisten (CH): `DIGITEC_BESTELLHILFE_ZUERICH.md`, `SMART_PARKING_EINKAUFSLISTE.md`
-- Setup‑Guides und Troubleshooting: diverse `*.md` Dateien im Root
-- Konversations‑Zusammenfassung: `CONVERSATION_EXPORT.md`
  - Aufbauanleitung Variante A (Powerbank + PD‑Trigger): `hardware/ASSEMBLY_QUICKSTART_VAR_A.md`
  - Aufbauanleitung Variante A – ohne DC‑Stecker: `hardware/ASSEMBLY_QUICKSTART_VAR_A_NO_DC.md`
  - End‑to‑End Testleitfaden: `hardware/END_TO_END_TEST.md`
 
 ## Lizenz/Urheberrecht
+
+### /api/autocomplete
+
+Kostenloser zusammengesetzter Autocomplete-Endpunkt (Photon + Nominatim) über das Backend.
+
+Query Parameter:
+- `q` (string, erforderlich): Suchtext ab 1 Zeichen.
+- `limit` (int, optional, Standard 12, max 15): Begrenzung der Ergebnisanzahl.
+- `countrycodes` (string, optional, Standard `ch,de,at`): Komma-separierte Länder für Nominatim Bias.
+- `lat`, `lon` (float, optional): Nutzerposition zur leichten Ergebnis-Gewichtung.
+
+Antwort (JSON Array von Objekten):
+```
+[
+	{
+		"id": "osm_123456",          // eindeutige ID (Quelle + place_id oder Photon-ID)
+		"source": "osm" | "photon",   // Datenquelle
+		"primary": "Titel",            // Hauptanzeige (Name / Straße / Ort)
+		"secondary": "PLZ Ort",        // Zusatzinfos kompakt
+		"address": "Vollständige Adresse", 
+		"lat": 47.3769,
+		"lng": 8.5417
+	}
+]
+```
+
+Eigenschaften:
+- Kombiniert parallel beide Provider und entfernt Dubletten (`primary` + `secondary`).
+- Fallback: Falls keine Treffer, zweiter Durchlauf mit weiterem Nominatim-Scope.
+- Caching: 5 Minuten pro Suchkombination (inkl. Koordinaten Bias).
+- Rate Limit: 30 Requests / 60 Sekunden pro IP (429 bei Überschreitung).
+- Keine externen API Keys notwendig (rein Open Data).
+
+Verwendung im Frontend: Die Komponente `AddressAutocomplete` ruft diesen Endpunkt mit Axios auf (`GET /api/autocomplete`). Bei Auswahl eines Eintrags werden Adresse und Koordinaten ins Formular übernommen.
+
 
 Interne Projektdokumentation (Backup). Nutzung gemäß interner Vereinbarungen. 

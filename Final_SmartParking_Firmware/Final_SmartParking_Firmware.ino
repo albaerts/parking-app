@@ -1866,3 +1866,6 @@ void handleEmergencyStop() {
 
 // (Magnetometer helpers removed per user request)
 // (Cleanup notes removed)
+localStorage.setItem('token', 'dev-token-admin');
+localStorage.setItem('BACKEND_URL', 'http://127.0.0.1:8001'); // optional, falls dein frontend liest BACKEND_URL from localStorage
+location.reload();

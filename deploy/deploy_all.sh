@@ -71,6 +71,7 @@ WorkingDirectory=/var/www/parking
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/var/www/parking/backend/.env
 ExecStart=/var/www/parking/.venv/bin/python -m uvicorn backend.server:app --host 127.0.0.1 --port 8001 --workers 2
+ExecStart=/var/www/parking/.venv/bin/python -m uvicorn backend.server_gashis:app --host 127.0.0.1 --port 8001 --workers 2
 Restart=always
 
 [Install]

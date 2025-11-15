@@ -1,0 +1,22 @@
+{
+  "short_name": "ParkingApp",
+  "name": "ParkingApp | Smart Parking Solutions",
+  "description": "Smart Parking Management System – effiziente Verwaltung von Parkplätzen.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "%PUBLIC_URL%/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "%PUBLIC_URL%/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

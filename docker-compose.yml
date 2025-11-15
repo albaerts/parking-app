@@ -1,26 +1,26 @@
-version: '3.8'
-
 services:
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: parking_backend
-    # Persist DB to local file so SQLite survives container restarts
-    volumes:
-      - ./backend/parking.db:/app/parking.db
+    # For local dev, do not mount the DB file to avoid permission/user mismatches;
+    # the container writes to /app/backend/parking.db (owned by appuser in the image).
     environment:
       # backend/server_gashis.py computes DATABASE_PATH relative to module file; keep port 8000
       - PYTHONUNBUFFERED=1
+      # Dev email provider and behavior
+      - EMAIL_PROVIDER=console
+      - AUTO_VERIFY_ON_EMAIL_FAILURE=true
     ports:
       - "8000:8000"
     restart: unless-stopped
 
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
+    image: ghcr.io/albaerts/parking-frontend:latest
     container_name: parking_frontend
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "3000:80"
     restart: unless-stopped

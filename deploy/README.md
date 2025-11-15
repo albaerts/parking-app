@@ -75,6 +75,7 @@ Check:
 ## Hinweise
 - Keine neuen Benutzer werden erstellt. Bestehende `@test.com`-User werden nicht verändert.
 - Möchtest du die Subdomain auf Root nutzen (ohne `/parking/`), dann muss im Frontend `package.json` die `homepage` entfernt/angepasst und neu gebaut werden. Das ist optional und nicht Teil dieser Standard-Variante.
+- Für Produktion mit PostgreSQL (empfohlen) solltest du ein Alembic Setup hinzufügen: `backend/alembic.ini`, ein `alembic/` Verzeichnis mit `env.py` und Migrationen. Danach kannst du Migrationen lokal erzeugen: `alembic revision --autogenerate -m "add field"` und deployseitig laufen lassen (`deploy/migrate_db.sh` nutzt Alembic automatisch, wenn verfügbar).
 
 ## Änderungen (automatisch angewendet)
 

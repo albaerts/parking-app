@@ -7,19 +7,19 @@ services:
     # Do NOT mount ./backend in production; it overrides packaged code and can hide installed deps.
     # SQLite writes are permitted because the image sets correct ownership for /app/backend.
     environment:
-      - PYTHONUNBUFFERED=1
+      PYTHONUNBUFFERED: "1"
       # Production secrets: set JWT_SECRET and optionally DATABASE_URL in the host environment
-      - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL}
       # Microsoft Graph email settings (required for registration verification emails)
-      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
-      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
-      - MAIL_FROM=${MAIL_FROM}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      MAIL_FROM: ${MAIL_FROM}
       # Optional: keep false in production to enforce real email verification
-      - AUTO_VERIFY_ON_EMAIL_FAILURE=${AUTO_VERIFY_ON_EMAIL_FAILURE:false}
+      AUTO_VERIFY_ON_EMAIL_FAILURE: ${AUTO_VERIFY_ON_EMAIL_FAILURE:-false}
       # Allow login without email verification (for tests/staging only)
-      - ALLOW_UNVERIFIED_LOGIN=${ALLOW_UNVERIFIED_LOGIN:false}
+      ALLOW_UNVERIFIED_LOGIN: ${ALLOW_UNVERIFIED_LOGIN:-false}
     ports:
       - "8000:8000"
     restart: always

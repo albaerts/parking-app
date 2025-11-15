@@ -50,6 +50,14 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Optional Prometheus metrics (/metrics). Not exposed via proxy by default.
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator  # type: ignore
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+except Exception:
+    # Metrics disabled or dependency missing; continue without failing.
+    pass
+
 # Simple health & version endpoint (used by docker-compose healthcheck)
 @app.get("/health")
 async def health():

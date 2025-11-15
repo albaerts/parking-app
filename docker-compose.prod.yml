@@ -24,6 +24,11 @@ services:
     ports:
       - "8000:8000"
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - postgres
     healthcheck:
@@ -39,6 +44,11 @@ services:
     ports:
       - "3000:80"
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
   proxy:
     image: nginx:stable-alpine
     container_name: parking_proxy
@@ -54,6 +64,11 @@ services:
       - frontend
       - backend
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost/ || exit 1"]
       interval: 30s

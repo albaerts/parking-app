@@ -470,7 +470,8 @@ const Login = ({ onSwitchToRegister }) => {
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">ParkingApp Login</h1>
-          <p className="text-gray-600">Commit: {process.env.REACT_APP_COMMIT_SHA || 'dev'} · Bitte anmelden</p>
+          {/* Entfernt Commit-SHA Anzeige auf Wunsch. Hinweis für Nutzer bleibt schlank. */}
+          <p className="text-gray-600">Bitte anmelden</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6">

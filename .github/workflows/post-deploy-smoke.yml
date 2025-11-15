@@ -18,27 +18,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install test dependencies
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install pytest requests
+          pip install requests
 
-      - name: Run smoke tests (register/login)
+      - name: Run lightweight API smoke
         env:
-          TEST_BASE_URL: https://parking.gashis.ch
-          # deterministic email so we can cleanup afterwards
-          TEST_SMOKE_EMAIL: smoke+${{ github.run_id }}@example.com
+          BASE: https://parking.gashis.ch/api
         run: |
-          echo "Using TEST_SMOKE_EMAIL=$TEST_SMOKE_EMAIL"
-          pytest tests/test_auth.py -q
-
-      - name: Cleanup test user on VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_SSH_HOST }}
-          username: ${{ secrets.VPS_SSH_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_SSH_PORT }}
-          script: |
-            cd /var/www/parkingsrv || exit 1
-            docker exec -i parking_postgres psql -U parking -d parkingdb -c "DELETE FROM users WHERE email='${{ env.TEST_SMOKE_EMAIL }}';"
+          python smoke_api_only.py

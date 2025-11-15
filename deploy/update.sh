@@ -46,6 +46,22 @@ docker pull ${REGISTRY}/${REPO_OWNER}/parking-backend:${IMAGE_TAG}
 echo "Pulling frontend image: ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}"
 docker pull ${REGISTRY}/${REPO_OWNER}/parking-frontend:${IMAGE_TAG}
 
+# Ensure Postgres is up before running migrations
+echo "Starting postgres service first to support migrations"
+$DC -f ${COMPOSE_FILE} up -d postgres
+
+echo "Waiting for postgres to be healthy..."
+for i in $(seq 1 30); do
+	if docker ps -q -f name=parking_postgres >/dev/null 2>&1; then
+		if docker exec parking_postgres pg_isready -U "${POSTGRES_USER:-parking}" -d "${POSTGRES_DB:-parkingdb}" >/dev/null 2>&1; then
+			echo "Postgres is ready"
+			break
+		fi
+	fi
+	echo "Postgres not ready yet (${i}/30), sleeping 2s..."
+	sleep 2
+done
+
 # Run DB migrations: prefer running inside the backend container (so Python deps from the image are available)
 echo "Attempting to run migrations inside backend container (docker-compose run)"
 set +e
@@ -55,33 +71,12 @@ if $DC -f ${COMPOSE_FILE} config --services | grep -q '^backend$'; then
 	if $DC -f ${COMPOSE_FILE} run --rm backend python3 -m alembic -c backend/alembic.ini upgrade head; then
 		echo "Alembic migrations applied inside container"
 	else
-		echo "Alembic inside container failed — trying SQLAlchemy create_all inside container"
-		# Attempt a safe in-container schema patch: add missing columns to existing SQLite users table
-		if $DC -f ${COMPOSE_FILE} run --rm backend sh -lc "python3 - <<'PY'
-import sqlite3
-p = '/app/backend/parking.db'
-conn = sqlite3.connect(p)
-c = conn.cursor()
-cols = [r[1] for r in c.execute('PRAGMA table_info(users)')]
-if 'password_hash' not in cols:
-	c.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
-if 'role' not in cols:
-	c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'")
-if 'last_login' not in cols:
-	c.execute("ALTER TABLE users ADD COLUMN last_login TIMESTAMP")
-conn.commit()
-conn.close()
-print('patched users table')
-PY"; then
-			echo "in-container users table patched (columns added if missing)"
+		echo "Alembic inside container failed — attempting fallback"
+		if [ -x ./deploy/migrate_db.sh ]; then
+			echo "Running host-side ./deploy/migrate_db.sh"
+			./deploy/migrate_db.sh || echo "Host-side migration script failed (continuing)"
 		else
-			echo "Container-based migrations failed — falling back to host migrate script if present"
-			if [ -x ./deploy/migrate_db.sh ]; then
-				echo "Running host-side ./deploy/migrate_db.sh"
-				./deploy/migrate_db.sh || echo "Host-side migration script failed (continuing)"
-			else
-				echo "No host migrate_db.sh present or executable — skipping migrations"
-			fi
+			echo "No host migrate_db.sh present or executable — skipping migrations"
 		fi
 	fi
 else

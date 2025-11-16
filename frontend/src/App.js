@@ -6618,6 +6618,8 @@ const PaymentSuccess = () => {
 
 // Public confirmation page shown after successful email verification
 const EmailVerified = () => {
+  const navigate = useNavigate();
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
@@ -6626,7 +6628,7 @@ const EmailVerified = () => {
         </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">E-Mail verifiziert!</h1>
         <p className="text-gray-600 mb-8">Ihr Konto wurde erfolgreich aktiviert. Sie können sich jetzt anmelden.</p>
-        <button onClick={() => window.location.href = '/'} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">Zum Login</button>
+        <button onClick={() => navigate('/')} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">Zum Login</button>
       </div>
     </div>
   );
@@ -6653,23 +6655,11 @@ const VersionBadge = () => {
 const App = () => {
   const [showLogin, setShowLogin] = useState(true);
   const { user, logout, isAuthenticated } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Handle email verification route
-  if (location.pathname === '/email-verified') {
-    return <EmailVerified />;
-  }
 
   if (!isAuthenticated) {
     return showLogin 
       ? <Login onSwitchToRegister={() => setShowLogin(false)} />
       : <Register onSwitchToLogin={() => setShowLogin(true)} />;
-  }
-
-  // Handle routing
-  if (location.pathname === '/payment-success') {
-    return <PaymentSuccess />;
   }
 
   return (
@@ -6692,11 +6682,20 @@ const AppWrapper = () => {
   return (
     <>
       <AuthProvider>
-        <App />
+        <Routes>
+          <Route path="/email-verified" element={<EmailVerified />} />
+          <Route path="/payment-success" element={<PaymentSuccessWrapper />} />
+          <Route path="/*" element={<App />} />
+        </Routes>
       </AuthProvider>
       <VersionBadge />
     </>
   );
+};
+
+// Wrapper for PaymentSuccess to use it in Routes
+const PaymentSuccessWrapper = () => {
+  return <PaymentSuccess />;
 };
 
 export default AppWrapper;

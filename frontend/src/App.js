@@ -6653,10 +6653,11 @@ const VersionBadge = () => {
 const App = () => {
   const [showLogin, setShowLogin] = useState(true);
   const { user, logout, isAuthenticated } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Handle email verification route
-  const currentPath = window.location.pathname;
-  if (currentPath === '/email-verified') {
+  if (location.pathname === '/email-verified') {
     return <EmailVerified />;
   }
 
@@ -6667,7 +6668,7 @@ const App = () => {
   }
 
   // Handle routing
-  if (currentPath === '/payment-success') {
+  if (location.pathname === '/payment-success') {
     return <PaymentSuccess />;
   }
 

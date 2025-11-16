@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quick-Setup für einen Ubuntu-Server (ohne Cloudflare)
+# Quick-Setup für einen Ubuntu-Server
 # Ziel: api.gashis.ch -> Nginx (TLS) -> Uvicorn (FastAPI auf 127.0.0.1:8000)
 #
 # Voraussetzungen:

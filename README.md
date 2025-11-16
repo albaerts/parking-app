@@ -27,9 +27,9 @@ Das Frontend ist typischerweise unter `http://localhost:3000` erreichbar.
 
 Hinweis: Das Frontend ruft teils PHP‑artige Endpunkte (z. B. `/login.php`) auf. Im Backend existieren dafür kompatible Entwicklungs‑Routen.
 
-## Öffentliche Erreichbarkeit (optional)
+## Produktionsserver
 
-Für Tests mit Geräten (ESP32/LTE) kann das Backend via Cloudflare Quick Tunnel öffentlich gemacht werden. Siehe Dokumentation in den Projektdateien.
+Das Backend läuft auf dem eigenen Server unter `https://parking.gashis.ch/api`.
 
 ## Hardware/Firmware
 

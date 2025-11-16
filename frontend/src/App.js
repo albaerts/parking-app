@@ -2704,7 +2704,8 @@ const MeineParkplaetze = () => {
       loadParkplaetze();
     } catch (error) {
       console.error('Fehler:', error);
-      alert('Fehler beim Speichern des Parkplatzes');
+      const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || '';
+      alert(`Fehler beim Speichern des Parkplatzes${detail ? `: ${detail}` : ''}`);
     }
   };
 

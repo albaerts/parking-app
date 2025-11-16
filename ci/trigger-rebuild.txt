@@ -1,4 +1,0 @@
-Trigger CI rebuild to include Alembic in backend image.
-Timestamp: 2025-10-27T12:xx:00Z
-
-This file was added by the deploy helper to trigger a rebuild after adding Alembic to requirements.

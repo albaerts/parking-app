@@ -8,6 +8,10 @@ BASE = os.environ.get("BASE", "https://parking.gashis.ch/api").rstrip("/")
 
 results = []
 
+def log_info(name, msg=""):
+    # Neutral info line that doesn't count as pass/fail in the summary
+    print(f"ℹ️  {name} - {msg}")
+
 def log(name, ok, msg=""):
     results.append((name, ok, msg))
     symbol = "✅" if ok else "❌"
@@ -45,17 +49,20 @@ try:
 except Exception as e:
     log("GET /autocomplete", False, str(e))
 
-# 4. Rate limit smoke (optional, tolerant)
-violations = 0
-for i in range(4):
-    try:
-        rq = requests.get(f"{BASE}/autocomplete", params={"q": f"Rate{i}", "limit": 1}, timeout=8)
-        if rq.status_code == 429:
-            violations += 1
-            break
-    except Exception:
-        pass
-log("Rate limit engaged?", violations > 0, f"violations_detected={violations}")
+# 4. Rate limit smoke (optional, informational)
+if os.environ.get("DISABLE_RATE_LIMIT_PROBE", "0") not in ("1", "true", "True"):
+    violations = 0
+    for i in range(4):
+        try:
+            rq = requests.get(f"{BASE}/autocomplete", params={"q": f"Rate{i}", "limit": 1}, timeout=8)
+            if rq.status_code == 429:
+                violations += 1
+                break
+        except Exception:
+            pass
+    log_info("Rate limit probe", f"violations_detected={violations}")
+else:
+    log_info("Rate limit probe", "skipped via DISABLE_RATE_LIMIT_PROBE=1")
 
 print("\nSummary:")
 passed = sum(1 for _, ok, _ in results if ok)

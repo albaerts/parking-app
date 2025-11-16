@@ -109,9 +109,17 @@ def init_database():
             longitude REAL NOT NULL,
             status TEXT DEFAULT 'free',
             price_per_hour REAL DEFAULT 0.0,
+            owner_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # Ensure owner_id exists for older databases
+    try:
+        cursor.execute("ALTER TABLE parking_spots ADD COLUMN owner_id INTEGER")
+    except Exception:
+        # Column already exists
+        pass
     
     # Create users table (simple)
     cursor.execute('''

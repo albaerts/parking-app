@@ -1,0 +1,76 @@
+name: Remote Recover Proxy
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Aktion: diag | http-fallback | tls-restore | restart"
+        required: true
+        default: diag
+        type: choice
+        options:
+          - diag
+          - http-fallback
+          - tls-restore
+          - restart
+      post_diag:
+        description: "Nach der Aktion automatisch Diagnose ausführen?"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+
+jobs:
+  recover:
+    name: Run remote recover on server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prüfe Secrets
+        run: |
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ] || [ -z "${{ secrets.SSH_HOST }}" ] || [ -z "${{ secrets.REMOTE_PATH }}" ]; then
+            echo "Erforderliche Secrets fehlen. Setze SSH_PRIVATE_KEY, SSH_HOST, SSH_USER (optional, default 'deploy'), SSH_PORT (optional) und REMOTE_PATH." >&2
+            exit 1
+          fi
+
+      - name: Remote Recover ausführen
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER || 'deploy' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -euxo pipefail
+            cd ${{ secrets.REMOTE_PATH }}
+
+            # Repo aktualisieren, damit neueste Skripte (recover_proxy.sh, diag_proxy.sh, nginx.http.conf) vorhanden sind
+            if [ -d .git ]; then
+              git fetch --all --prune || true
+              git reset --hard origin/main || true
+            fi
+
+            chmod +x deploy/*.sh || true
+
+            # Ausgewählte Aktion starten
+            CMD_MODE="${{ inputs.mode }}"
+            POST="${{ inputs.post_diag }}"
+            if [ "$POST" = "true" ]; then
+              EXTRA="--post-diag"
+            else
+              EXTRA=""
+            fi
+
+            echo "Starte recover_proxy.sh $CMD_MODE $EXTRA"
+            ./deploy/recover_proxy.sh "$CMD_MODE" $EXTRA
+
+      - name: Ergebnis verifizieren (HTTP/HTTPS)
+        if: ${{ inputs.mode == 'http-fallback' || inputs.mode == 'restart' || inputs.mode == 'tls-restore' }}
+        run: |
+          set -e
+          echo "Prüfe HTTP:"
+          curl -sS -m 10 -o /dev/null -w "HTTP:%{http_code}\n" http://parking.gashis.ch/ || true
+          echo "Prüfe HTTPS /health via /api:"
+          curl -sS -m 10 -o /dev/null -w "HTTP:%{http_code}\n" https://parking.gashis.ch/api/health || true

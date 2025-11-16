@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-yourorg}/parking-backend:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-albaerts}/parking-backend:${IMAGE_TAG:-latest}
     container_name: parking_backend
     # Do NOT mount ./backend in production; it overrides packaged code and can hide installed deps.
     # SQLite writes are permitted because the image sets correct ownership for /app/backend.
@@ -11,7 +11,8 @@ services:
       # Production secrets: set JWT_SECRET and optionally DATABASE_URL in the host environment
       JWT_SECRET: ${JWT_SECRET}
       # Prefer Postgres in Produktion; Default auf interne Postgres-Instanz
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://$${POSTGRES_USER:-parking}:$${POSTGRES_PASSWORD:-parking_pass}@postgres:5432/$${POSTGRES_DB:-parkingdb}}
+      # Note: Compose does not expand nested variables in defaults; hardcode service-internal defaults here.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://parking:parking_pass@postgres:5432/parkingdb}
       # Microsoft Graph email settings (required for registration verification emails)
       AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
@@ -39,7 +40,7 @@ services:
       start_period: 20s
 
   frontend:
-    image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-yourorg}/parking-frontend:${IMAGE_TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${REPO_OWNER:-albaerts}/parking-frontend:${IMAGE_TAG:-latest}
     container_name: parking_frontend
     ports:
       - "3000:80"

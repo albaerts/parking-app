@@ -3023,6 +3023,7 @@ const OwnerDashboard = () => {
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [devicesError, setDevicesError] = useState(null);
   const [devicesLastUpdated, setDevicesLastUpdated] = useState(null);
+  const [highlightDeviceId, setHighlightDeviceId] = useState(null);
   
   // New states for enhanced functionality
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -3764,6 +3765,14 @@ const OwnerDashboard = () => {
       setOwnerDevices([]);
     } finally {
       setDevicesLoading(false);
+    }
+  };
+
+  const refreshDeviceNow = async (hardwareId) => {
+    await loadOwnerDevices();
+    if (hardwareId) {
+      setHighlightDeviceId(hardwareId);
+      setTimeout(() => setHighlightDeviceId(null), 2000);
     }
   };
 
@@ -4833,7 +4842,7 @@ const OwnerDashboard = () => {
                 <p className="text-sm text-gray-600">Deine zugewiesenen Hardware-Geräte</p>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => loadOwnerDevices()}
+                    onClick={() => refreshDeviceNow('PARK_DEVICE_001')}
                     disabled={devicesLoading}
                     className={`px-3 py-1 rounded text-sm ${devicesLoading ? 'bg-blue-300 cursor-not-allowed text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
                   >
@@ -4851,7 +4860,7 @@ const OwnerDashboard = () => {
                 )}
 
                 {ownerDevices.map((d) => (
-                  <div key={d.hardware_id} className="p-4 border rounded-md bg-gray-50">
+                  <div key={d.hardware_id} className={`p-4 border rounded-md bg-gray-50 ${highlightDeviceId === d.hardware_id ? 'ring-2 ring-blue-400' : ''}`}>
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium text-gray-900">{d.hardware_id}</p>

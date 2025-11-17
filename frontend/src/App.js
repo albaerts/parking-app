@@ -267,7 +267,9 @@ const InteractiveMap = ({ userLocation, parkingSpots = [] }) => {
             // Handle both backend data structure and sample data
             const lat = spot.latitude || spot.lat;
             const lng = spot.longitude || spot.lng;
-            const available = spot.is_available !== undefined ? spot.is_available : spot.available;
+            const available = (spot.status !== undefined && spot.status !== null)
+              ? (spot.status === 'free')
+              : (spot.is_available !== undefined ? spot.is_available : spot.available);
             const price = spot.hourly_rate || spot.price;
             
             // Skip spots without valid coordinates
@@ -406,7 +408,9 @@ const MapComponent = ({
           // Handle both backend data structure and sample data
           const lat = spot.latitude || spot.lat;
           const lng = spot.longitude || spot.lng;
-          const available = spot.is_available !== undefined ? spot.is_available : spot.available;
+          const available = (spot.status !== undefined && spot.status !== null)
+            ? (spot.status === 'free')
+            : (spot.is_available !== undefined ? spot.is_available : spot.available);
           const price = spot.hourly_rate || spot.price;
           
           // Skip spots without valid coordinates

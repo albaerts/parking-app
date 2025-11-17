@@ -1427,12 +1427,18 @@ async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetr
         cursor = conn.cursor()
 
         # Upsert device entry and update telemetry columns
-        cursor.execute('SELECT id FROM hardware_devices WHERE hardware_id = ?', (hardware_id,))
+        cursor.execute('SELECT id, parking_spot_id FROM hardware_devices WHERE hardware_id = ?', (hardware_id,))
         row = cursor.fetchone()
         now = payload.timestamp.isoformat() if payload.timestamp else datetime.now().isoformat()
         last_mag_json = json.dumps(payload.last_mag) if payload.last_mag is not None else None
 
+        assigned_spot_id = None
         if row:
+            # row[0] = id, row[1] = parking_spot_id
+            try:
+                assigned_spot_id = row[1]
+            except Exception:
+                assigned_spot_id = None
             cursor.execute('''
                 UPDATE hardware_devices SET last_heartbeat = ?, battery_level = ?, rssi = ?, occupancy = ?, last_mag = ?
                 WHERE hardware_id = ?
@@ -1442,6 +1448,22 @@ async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetr
                 INSERT INTO hardware_devices (hardware_id, owner_email, parking_spot_id, created_at, last_heartbeat, battery_level, rssi, occupancy, last_mag)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (hardware_id, None, None, datetime.now().isoformat(), now, payload.battery_level, payload.rssi, payload.occupancy, last_mag_json))
+            assigned_spot_id = None
+
+        # If device is assigned to a parking spot and telemetry contains occupancy, sync spot status
+        try:
+            occ = payload.occupancy if hasattr(payload, 'occupancy') else None
+            if occ and assigned_spot_id:
+                # Normalize allowed values
+                allowed = { 'free', 'occupied', 'reserved' }
+                new_status = occ if occ in allowed else None
+                if new_status:
+                    cursor.execute('''
+                        UPDATE parking_spots SET status = ? WHERE id = ?
+                    ''', (new_status, assigned_spot_id))
+        except Exception:
+            # Do not fail telemetry on sync errors; continue
+            pass
 
         conn.commit()
         conn.close()

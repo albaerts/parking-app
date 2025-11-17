@@ -38,7 +38,7 @@ L.Icon.Default.mergeOptions({
 // In production use the same origin (relative paths) so the front-end talks to
 // the backend through the same host (avoids external domain/cert problems).
 const BACKEND_URL = process.env.NODE_ENV === 'production'
-  ? '' // relative -> same origin in Produktion
+  ? '/api' // relative to /api prefix in production
   : `http://${window.location.hostname}:8000`; // im LAN funktioniert auch 192.168.x.x:8000
 const API = `${BACKEND_URL}`;
 

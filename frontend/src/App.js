@@ -47,7 +47,7 @@ const API = `${BACKEND_URL}`;
 // Hardware control helper (dev): enqueue command in memory backend
 async function sendHardwareCommandSimple(hardwareId, command, parameters = {}, secret = '') {
   try {
-    const url = `${API}/api/hardware/${hardwareId}/commands/queue`;
+    const url = `${API}/hardware/${hardwareId}/commands/queue`;
     const res = await axios.post(url, { command, parameters, secret });
     return res.data;
   } catch (e) {
@@ -3084,7 +3084,7 @@ const OwnerDashboard = () => {
     try {
       setAssignStatus('sending');
       const payload = { hardware_id: assignHardwareId, spot_id: Number(assignSpotId) };
-      const res = await axios.post(`${API}/api/owner/devices/assign`, payload);
+      const res = await axios.post(`${API}/owner/devices/assign`, payload);
       console.log('Assign response', res.data);
       setAssignStatus('ok');
       alert(`Device ${assignHardwareId} zugewiesen an Spot ${assignSpotId}`);
@@ -3736,7 +3736,7 @@ const OwnerDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await axios.get(`${API}/api/owner/devices`, { headers });
+      const res = await axios.get(`${API}/owner/devices`, { headers });
       // res.data.devices -> array of { hardware_id, owner_email, parking_spot_id, created_at }
       setOwnerDevices(res.data.devices || []);
     } catch (err) {
@@ -4841,7 +4841,7 @@ const OwnerDashboard = () => {
                         <button
                           onClick={async () => {
                             try {
-                              const res = await axios.get(`${API}/api/hardware/${d.hardware_id}/commands`);
+                              const res = await axios.get(`${API}/hardware/${d.hardware_id}/commands`);
                               const cmds = res.data.commands || [];
                               if (cmds.length === 0) {
                                 alert('Keine wartenden Befehle');

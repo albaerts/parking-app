@@ -41,13 +41,19 @@ const BACKEND_URL = process.env.NODE_ENV === 'production'
   ? '/api' // relative to /api prefix in production
   : `http://${window.location.hostname}:8000`; // im LAN funktioniert auch 192.168.x.x:8000
 const API = `${BACKEND_URL}`;
+// Hardware-Endpunkte liegen auf /hardware ohne /api-Prefix in Prod,
+// in Dev direkt auf :8000
+const HARDWARE_BASE = process.env.NODE_ENV === 'production' ? '' : BACKEND_URL;
+// Für Befehle (commands) nutzen wir in Prod explizit das /api-Prefix,
+// da diese Routen serverseitig unter /api/hardware/* existieren.
+const COMMANDS_BASE = process.env.NODE_ENV === 'production' ? API : HARDWARE_BASE;
 
 // Entfernt: Google Maps / Places – wir verwenden rein freie Quellen (Photon + Nominatim)
 
 // Hardware control helper (dev): enqueue command in memory backend
 async function sendHardwareCommandSimple(hardwareId, command, parameters = {}, secret = '') {
   try {
-    const url = `${API}/hardware/${hardwareId}/commands/queue`;
+    const url = `${COMMANDS_BASE}/hardware/${hardwareId}/commands/queue`;
     const res = await axios.post(url, { command, parameters, secret });
     return res.data;
   } catch (e) {
@@ -267,9 +273,7 @@ const InteractiveMap = ({ userLocation, parkingSpots = [] }) => {
             // Handle both backend data structure and sample data
             const lat = spot.latitude || spot.lat;
             const lng = spot.longitude || spot.lng;
-            const available = (spot.status !== undefined && spot.status !== null)
-              ? (spot.status === 'free')
-              : (spot.is_available !== undefined ? spot.is_available : spot.available);
+            const available = spot.is_available !== undefined ? spot.is_available : spot.available;
             const price = spot.hourly_rate || spot.price;
             
             // Skip spots without valid coordinates
@@ -408,9 +412,7 @@ const MapComponent = ({
           // Handle both backend data structure and sample data
           const lat = spot.latitude || spot.lat;
           const lng = spot.longitude || spot.lng;
-          const available = (spot.status !== undefined && spot.status !== null)
-            ? (spot.status === 'free')
-            : (spot.is_available !== undefined ? spot.is_available : spot.available);
+          const available = spot.is_available !== undefined ? spot.is_available : spot.available;
           const price = spot.hourly_rate || spot.price;
           
           // Skip spots without valid coordinates
@@ -911,17 +913,17 @@ const ParkingMap = () => {
                 <div
                   key={spot.id}
                   className={`bg-white rounded-lg shadow-md p-4 border-l-4 ${
-                    spot.is_available ? 'border-green-400' : 'border-red-400'
+                    ((spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available))
+                      ? 'border-green-400' : 'border-red-400')
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="font-semibold text-gray-900">{spot.name}</h3>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      spot.is_available 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
+                      (spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available))
+                        ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
-                      {spot.is_available ? 'Available' : 'Occupied'}
+                      {(spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available)) ? 'Available' : 'Occupied'}
                     </span>
                   </div>
                   
@@ -933,7 +935,7 @@ const ParkingMap = () => {
                       {distance && <p>{distance.toFixed(1)} km away</p>}
                     </div>
                     
-                    {spot.is_available && !activeSession && (
+                    {(spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available)) && !activeSession && (
                       <button
                         onClick={() => startParkingSession(spot.id)}
                         className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition duration-200"
@@ -2475,17 +2477,17 @@ const ParkingMapContent = () => {
               <div
                 key={spot.id}
                 className={`bg-white rounded-lg shadow-md p-4 border-l-4 ${
-                  spot.is_available ? 'border-green-400' : 'border-red-400'
+                  ((spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available))
+                    ? 'border-green-400' : 'border-red-400')
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-semibold text-gray-900">{spot.name}</h3>
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    spot.is_available 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
+                    (spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available))
+                      ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
-                    {spot.is_available ? 'Available' : 'Occupied'}
+                    {(spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available)) ? 'Available' : 'Occupied'}
                   </span>
                 </div>
                 
@@ -2497,7 +2499,7 @@ const ParkingMapContent = () => {
                     {distance && <p>{distance.toFixed(1)} km away</p>}
                   </div>
                   
-                  {spot.is_available && !activeSession && (
+                  {(spot.status ? spot.status === 'free' : (spot.is_available !== undefined ? spot.is_available : spot.available)) && !activeSession && (
                     <button
                       onClick={() => startParkingSession(spot.id)}
                       className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition duration-200"
@@ -3027,7 +3029,6 @@ const OwnerDashboard = () => {
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [devicesError, setDevicesError] = useState(null);
   const [devicesLastUpdated, setDevicesLastUpdated] = useState(null);
-  const [highlightDeviceId, setHighlightDeviceId] = useState(null);
   
   // New states for enhanced functionality
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -3772,11 +3773,20 @@ const OwnerDashboard = () => {
     }
   };
 
-  const refreshDeviceNow = async (hardwareId) => {
-    await loadOwnerDevices();
-    if (hardwareId) {
-      setHighlightDeviceId(hardwareId);
-      setTimeout(() => setHighlightDeviceId(null), 2000);
+  const refreshDevice = async (hardwareId) => {
+    try {
+      const res = await axios.get(`${HARDWARE_BASE}/hardware/${hardwareId}/telemetry`);
+      const dev = res.data;
+      setOwnerDevices((prev) => {
+        const idx = prev.findIndex((d) => d.hardware_id === hardwareId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], telemetry: dev.telemetry };
+        return next;
+      });
+      setDevicesLastUpdated(new Date().toLocaleTimeString());
+    } catch (e) {
+      console.error('Failed to refresh device telemetry:', e);
     }
   };
 
@@ -3834,7 +3844,7 @@ const OwnerDashboard = () => {
 
   const simulateHardwareUpdate = async (hardwareId, isAvailable) => {
     try {
-      await axios.post(`${API}/hardware/${hardwareId}/status?is_available=${isAvailable}`);
+      await axios.post(`${HARDWARE_BASE}/hardware/${hardwareId}/status?is_available=${isAvailable}`);
       loadOwnerSpots();
       alert(`Hardware status updated: ${isAvailable ? 'Available' : 'Occupied'}`);
     } catch (error) {
@@ -4846,7 +4856,11 @@ const OwnerDashboard = () => {
                 <p className="text-sm text-gray-600">Deine zugewiesenen Hardware-Geräte</p>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => refreshDeviceNow('PARK_DEVICE_001')}
+                    onClick={async () => {
+                      // Gezielt aktuelle Telemetrie für PARK_DEVICE_001 holen, danach Liste aktualisieren
+                      await refreshDevice('PARK_DEVICE_001');
+                      await loadOwnerDevices();
+                    }}
                     disabled={devicesLoading}
                     className={`px-3 py-1 rounded text-sm ${devicesLoading ? 'bg-blue-300 cursor-not-allowed text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
                   >
@@ -4864,7 +4878,7 @@ const OwnerDashboard = () => {
                 )}
 
                 {ownerDevices.map((d) => (
-                  <div key={d.hardware_id} className={`p-4 border rounded-md bg-gray-50 ${highlightDeviceId === d.hardware_id ? 'ring-2 ring-blue-400' : ''}`}>
+                  <div key={d.hardware_id} className="p-4 border rounded-md bg-gray-50">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="font-medium text-gray-900">{d.hardware_id}</p>
@@ -4876,7 +4890,7 @@ const OwnerDashboard = () => {
                         <button
                           onClick={async () => {
                             try {
-                              const res = await axios.get(`${API}/hardware/${d.hardware_id}/commands`);
+                              const res = await axios.get(`${COMMANDS_BASE}/hardware/${d.hardware_id}/commands`);
                               const cmds = res.data.commands || [];
                               if (cmds.length === 0) {
                                 alert('Keine wartenden Befehle');

@@ -3068,6 +3068,7 @@ const OwnerDashboard = () => {
   // Manual hardware control (owner only)
   const [deviceId, setDeviceId] = useState('PARK_DEVICE_001');
   const [manualStatus, setManualStatus] = useState('idle'); // idle | sending | ok | error
+  const [manualNotice, setManualNotice] = useState(null); // { type: 'success'|'error', text: string }
   // Assign device to spot (owner UI)
   const [assignHardwareId, setAssignHardwareId] = useState('PARK_DEVICE_001');
   const [assignSpotId, setAssignSpotId] = useState('');
@@ -3079,11 +3080,20 @@ const OwnerDashboard = () => {
       // sendHardwareCommandSimple(urlPath) returns the backend response
       await sendHardwareCommandSimple(deviceId, command, {});
       setManualStatus('ok');
+      setManualNotice({ type: 'success', text: `Befehl gesendet: ${command}` });
     } catch (err) {
       console.error('Manual command failed:', err);
       setManualStatus('error');
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Unbekannter Fehler';
+      setManualNotice({ type: 'error', text: `Senden fehlgeschlagen: ${msg}` });
     }
   };
+
+  useEffect(() => {
+    if (!manualNotice) return;
+    const t = setTimeout(() => setManualNotice(null), 3000);
+    return () => clearTimeout(t);
+  }, [manualNotice]);
 
   const handleLogout = () => {
     logout();
@@ -4063,6 +4073,11 @@ const OwnerDashboard = () => {
           {/* Owner manual hardware controls (visible to owner users) */}
           <div className="mt-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">Manual Barrier Controls</h3>
+            {manualNotice && (
+              <div className={`mb-2 px-3 py-2 rounded text-sm ${manualNotice.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {manualNotice.text}
+              </div>
+            )}
             <div className="flex items-center space-x-2">
               <input
                 value={deviceId}

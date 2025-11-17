@@ -3083,8 +3083,10 @@ const OwnerDashboard = () => {
 
     try {
       setAssignStatus('sending');
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const payload = { hardware_id: assignHardwareId, spot_id: Number(assignSpotId) };
-      const res = await axios.post(`${API}/owner/devices/assign`, payload);
+      const res = await axios.post(`${API}/owner/devices/assign`, payload, { headers });
       console.log('Assign response', res.data);
       setAssignStatus('ok');
       alert(`Device ${assignHardwareId} zugewiesen an Spot ${assignSpotId}`);
@@ -3093,8 +3095,9 @@ const OwnerDashboard = () => {
       loadOwnerDevices();
     } catch (err) {
       console.error('Assign failed', err);
+      const errorMsg = err?.response?.data?.detail || err?.response?.data?.message || err.message || 'Unbekannter Fehler';
       setAssignStatus('error');
-      alert('Zuweisung fehlgeschlagen');
+      alert(`Zuweisung fehlgeschlagen: ${errorMsg}`);
     }
   };
 

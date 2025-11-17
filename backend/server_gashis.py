@@ -1411,7 +1411,7 @@ async def unified_autocomplete(q: str, request: Request, limit: int = 12, countr
     return final
 
 
-@app.post('/api/hardware/{hardware_id}/telemetry')
+@app.post('/hardware/{hardware_id}/telemetry')
 async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetry):
     """Receive telemetry/heartbeat from hardware devices.
 
@@ -1445,7 +1445,7 @@ async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetr
         raise HTTPException(status_code=500, detail=f"Telemetry error: {e}")
 
 
-@app.get('/api/owner/devices')
+@app.get('/owner/devices')
 async def list_owner_devices(authorization: str = Header(None)):
     """Return devices assigned to the owner.
 
@@ -1527,7 +1527,7 @@ async def list_owner_devices(authorization: str = Header(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post('/api/owner/devices/assign')
+@app.post('/owner/devices/assign')
 async def assign_device_to_spot(payload: dict, authorization: str = Header(None)):
     """Assign a hardware_id to a parking_spot_id. Requires owner/admin role in demo token."""
     hardware_id = payload.get('hardware_id')

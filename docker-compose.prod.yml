@@ -6,6 +6,8 @@ services:
     container_name: parking_backend
     # Do NOT mount ./backend in production; it overrides packaged code and can hide installed deps.
     # SQLite writes are permitted because the image sets correct ownership for /app/backend.
+    volumes:
+      - parking_db:/app/backend
     environment:
       PYTHONUNBUFFERED: "1"
       # Production secrets: set JWT_SECRET and optionally DATABASE_URL in the host environment
@@ -96,4 +98,5 @@ services:
 
 volumes:
   pgdata:
+  parking_db:
     driver: local

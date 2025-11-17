@@ -4087,17 +4087,20 @@ const OwnerDashboard = () => {
               />
               <button
                 onClick={() => handleManualCommand('raise_barrier')}
-                className="bg-green-600 text-white px-3 py-2 rounded-md text-sm hover:bg-green-700"
+                disabled={manualStatus === 'sending'}
+                className={`bg-green-600 text-white px-3 py-2 rounded-md text-sm hover:bg-green-700 ${manualStatus === 'sending' ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 Raise Barrier
               </button>
               <button
                 onClick={() => handleManualCommand('lower_barrier')}
-                className="bg-red-600 text-white px-3 py-2 rounded-md text-sm hover:bg-red-700"
+                disabled={manualStatus === 'sending'}
+                className={`bg-red-600 text-white px-3 py-2 rounded-md text-sm hover:bg-red-700 ${manualStatus === 'sending' ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 Lower Barrier
               </button>
               <span className="text-xs text-gray-500">Status: {manualStatus}</span>
+              <span className={`${manualStatus === 'sending' ? 'inline-block' : 'hidden'} ml-2 h-4 w-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin`}></span>
             </div>
           </div>
           {/* Assign device to spot UI */}

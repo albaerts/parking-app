@@ -2198,8 +2198,28 @@ const AccountManagement = () => {
 
 // User Dashboard with Navigation
 const UserDashboard = () => {
-  const [currentView, setCurrentView] = useState('map'); // 'map', 'history', 'account', or 'reviews'
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Determine current view from URL path
+  const getCurrentView = () => {
+    const path = location.pathname;
+    if (path.includes('/history')) return 'history';
+    if (path.includes('/reviews')) return 'reviews';
+    if (path.includes('/account')) return 'account';
+    return 'map';
+  };
+
+  const currentView = getCurrentView();
+
+  const handleNavigation = (viewId) => {
+    if (viewId === 'map') {
+      navigate('/');
+    } else {
+      navigate(`/${viewId}`);
+    }
+  };
 
   const navItems = [
     { id: 'map', label: 'Find Parking', icon: '🗺️' },
@@ -2228,7 +2248,7 @@ const UserDashboard = () => {
             {navItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setCurrentView(item.id)}
+                onClick={() => handleNavigation(item.id)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition duration-200 ${
                   currentView === item.id
                     ? 'bg-blue-600 text-white'
@@ -2935,7 +2955,31 @@ const MeineParkplaetze = () => {
 };
 
 const OwnerDashboard = () => {
-  const [activeTab, setActiveTab] = useState('my-spots');
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Determine active tab from URL path
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.includes('/bookings')) return 'bookings';
+    if (path.includes('/reviews')) return 'reviews';
+    if (path.includes('/revenue')) return 'revenue';
+    if (path.includes('/monitoring')) return 'monitoring';
+    if (path.includes('/account')) return 'account';
+    if (path.includes('/spots')) return 'spots';
+    return 'my-spots';
+  };
+
+  const activeTab = getActiveTab();
+
+  const handleTabChange = (tabId) => {
+    if (tabId === 'my-spots') {
+      navigate('/');
+    } else {
+      navigate(`/${tabId}`);
+    }
+  };
+
   const [spots, setSpots] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [ownerBookings, setOwnerBookings] = useState([]);
@@ -3880,7 +3924,7 @@ const OwnerDashboard = () => {
           {/* Tab Navigation */}
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
             <button
-              onClick={() => setActiveTab('my-spots')}
+              onClick={() => handleTabChange('my-spots')}
               className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'my-spots'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -3890,7 +3934,7 @@ const OwnerDashboard = () => {
               🅿️ Meine Parkplätze
             </button>
             <button
-              onClick={() => setActiveTab('spots')}
+              onClick={() => handleTabChange('spots')}
               className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'spots'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -3900,7 +3944,7 @@ const OwnerDashboard = () => {
               🗺️ Parking Spots Map
             </button>
             <button
-              onClick={() => setActiveTab('bookings')}
+              onClick={() => handleTabChange('bookings')}
               className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'bookings'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -3910,7 +3954,7 @@ const OwnerDashboard = () => {
               📝 Booking History
             </button>
             <button
-              onClick={() => setActiveTab('reviews')}
+              onClick={() => handleTabChange('reviews')}
               className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'reviews'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -3920,7 +3964,7 @@ const OwnerDashboard = () => {
               ⭐ Bewertungen
             </button>
             <button
-              onClick={() => setActiveTab('revenue')}
+              onClick={() => handleTabChange('revenue')}
               className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'revenue'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -3931,7 +3975,7 @@ const OwnerDashboard = () => {
             </button>
             {user && (user.role === 'admin' || user.role === 'owner') && (
               <button
-                onClick={() => setActiveTab('monitoring')}
+                onClick={() => handleTabChange('monitoring')}
                 className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                   activeTab === 'monitoring'
                     ? 'bg-white text-blue-600 shadow-sm'
@@ -3942,7 +3986,7 @@ const OwnerDashboard = () => {
               </button>
             )}
             <button
-              onClick={() => setActiveTab('account')}
+              onClick={() => handleTabChange('account')}
               className={`px-4 py-2 rounded-md font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === 'account'
                   ? 'bg-white text-blue-600 shadow-sm'
@@ -6154,11 +6198,32 @@ const OwnerAccountManagement = ({ spots, ownerBookings, user }) => {
 };
 
 const AdminDashboard = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Determine active tab from URL path
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.includes('/users')) return 'users';
+    if (path.includes('/spots')) return 'spots';
+    if (path.includes('/sessions')) return 'sessions';
+    return 'overview';
+  };
+
+  const activeTab = getActiveTab();
+
+  const handleTabChange = (tabId) => {
+    if (tabId === 'overview') {
+      navigate('/');
+    } else {
+      navigate(`/${tabId}`);
+    }
+  };
+
   const [users, setUsers] = useState([]);
   const [statistics, setStatistics] = useState({});
   const [allParkingSpots, setAllParkingSpots] = useState([]);
   const [allSessions, setAllSessions] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState(null);
 
@@ -6281,7 +6346,7 @@ const AdminDashboard = () => {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`px-4 py-2 rounded-lg flex items-center space-x-2 ${
                 activeTab === tab.id
                   ? 'bg-blue-600 text-white'

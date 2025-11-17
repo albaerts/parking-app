@@ -71,16 +71,32 @@ void initMMC5603() {
 }
 
 void readMagnetometer(int16_t* x, int16_t* y, int16_t* z) {
+  // Trigger measurement (TM_M bit in Control Register 0)
+  Wire.beginTransmission(MMC5603_ADDR);
+  Wire.write(0x1B);  // Control Register 0
+  Wire.write(0x01);  // TM_M: Take measurement
+  Wire.endTransmission();
+  
+  delay(10);  // Wait for measurement to complete
+  
+  // Read data from Xout0 register (0x00)
   Wire.beginTransmission(MMC5603_ADDR);
   Wire.write(0x00);
   Wire.endTransmission(false);
-  Wire.requestFrom(MMC5603_ADDR, 6);
+  Wire.requestFrom(MMC5603_ADDR, 9);  // Read 9 bytes (3 axes x 3 bytes each)
   
-  if (Wire.available() >= 6) {
-    *x = (Wire.read() << 8) | Wire.read();
-    *y = (Wire.read() << 8) | Wire.read();
-    *z = (Wire.read() << 8) | Wire.read();
+  if (Wire.available() >= 9) {
+    // MMC5603 outputs 18-bit data (3 bytes per axis)
+    uint32_t x_raw = ((uint32_t)Wire.read() << 12) | ((uint32_t)Wire.read() << 4) | ((uint32_t)Wire.read() >> 4);
+    uint32_t y_raw = ((uint32_t)Wire.read() << 12) | ((uint32_t)Wire.read() << 4) | ((uint32_t)Wire.read() >> 4);
+    uint32_t z_raw = ((uint32_t)Wire.read() << 12) | ((uint32_t)Wire.read() << 4) | ((uint32_t)Wire.read() >> 4);
+    
+    // Convert to signed 16-bit (center around 131072, scale down)
+    *x = (int16_t)((x_raw - 131072) / 16);
+    *y = (int16_t)((y_raw - 131072) / 16);
+    *z = (int16_t)((z_raw - 131072) / 16);
   } else {
+    Serial.println("⚠️  MMC5603 read failed");
     *x = *y = *z = 0;
   }
 }

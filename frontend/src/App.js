@@ -6727,6 +6727,15 @@ const App = () => {
       : <Register onSwitchToLogin={() => setShowLogin(true)} />;
   }
 
+  // Wait for user profile to load before showing dashboard
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-xl text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       {/* Logout Button */}
@@ -6737,8 +6746,8 @@ const App = () => {
         Logout
       </button>
       
-      {user?.role === 'admin' ? <AdminDashboard /> : 
-       user?.role === 'owner' ? <OwnerDashboard /> : <UserDashboard />}
+      {user.role === 'admin' ? <AdminDashboard /> : 
+       user.role === 'owner' ? <OwnerDashboard /> : <UserDashboard />}
     </div>
   );
 };

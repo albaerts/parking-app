@@ -6744,7 +6744,7 @@ const VersionBadge = () => {
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(true);
-  const { user, logout, isAuthenticated, loading } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
 
   if (!isAuthenticated) {
     return showLogin 
@@ -6753,7 +6753,7 @@ const App = () => {
   }
 
   // Wait for user profile to load before showing dashboard
-  if (loading || !user) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-xl text-gray-600">Loading...</div>

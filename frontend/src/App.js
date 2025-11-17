@@ -3734,14 +3734,18 @@ const OwnerDashboard = () => {
   };
 
   const loadOwnerDevices = async () => {
+    console.log('[loadOwnerDevices] Starting...');
     setDevicesError(null);
     setDevicesLoading(true);
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[loadOwnerDevices] Fetching from', `${API}/owner/devices`);
       const res = await axios.get(`${API}/owner/devices`, { headers });
+      console.log('[loadOwnerDevices] Response:', res.data);
       // res.data.devices -> array of { hardware_id, owner_email, parking_spot_id, created_at }
       setOwnerDevices(res.data.devices || []);
+      console.log('[loadOwnerDevices] Set devices:', res.data.devices?.length || 0);
     } catch (err) {
       console.error('Failed to load owner devices:', err);
       setDevicesError(err?.response?.data || err.message || 'Error');

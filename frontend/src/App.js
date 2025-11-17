@@ -6685,8 +6685,7 @@ const AppWrapper = () => {
         <Routes>
           <Route path="/email-verified" element={<EmailVerified />} />
           <Route path="/payment-success" element={<PaymentSuccessWrapper />} />
-          <Route path="/" element={<App />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/*" element={<App />} />
         </Routes>
       </AuthProvider>
       <VersionBadge />

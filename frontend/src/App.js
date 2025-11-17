@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
 import './App.css';
 import axios from 'axios';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -6680,7 +6680,7 @@ const App = () => {
 
 const AppWrapper = () => {
   return (
-    <>
+    <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/email-verified" element={<EmailVerified />} />
@@ -6689,7 +6689,7 @@ const AppWrapper = () => {
         </Routes>
       </AuthProvider>
       <VersionBadge />
-    </>
+    </BrowserRouter>
   );
 };
 

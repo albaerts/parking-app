@@ -1708,9 +1708,6 @@ const AccountManagement = () => {
       });
       
       setMessage('Profile updated successfully!');
-      
-      // Reload the profile data to refresh the form
-      await loadUserProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
       setError('Failed to update profile. Please try again.');

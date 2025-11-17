@@ -306,14 +306,26 @@ const InteractiveMap = ({ userLocation, parkingSpots = [] }) => {
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           <button
                             onClick={async () => {
-                              try { await sendHardwareCommandSimple('PARK_DEVICE_001', 'raise_barrier'); alert('Raise queued'); } catch {}
+                              try {
+                                await sendHardwareCommandSimple('PARK_DEVICE_001', 'raise_barrier');
+                                alert('Raise queued');
+                              } catch (e) {
+                                const msg = e?.response?.data?.detail || e?.response?.data || e?.message || 'Unbekannter Fehler';
+                                alert(`Fehler beim Senden (raise): ${msg}`);
+                              }
                             }}
                             className="w-full bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
                             Raise
                           </button>
                           <button
                             onClick={async () => {
-                              try { await sendHardwareCommandSimple('PARK_DEVICE_001', 'lower_barrier'); alert('Lower queued'); } catch {}
+                              try {
+                                await sendHardwareCommandSimple('PARK_DEVICE_001', 'lower_barrier');
+                                alert('Lower queued');
+                              } catch (e) {
+                                const msg = e?.response?.data?.detail || e?.response?.data || e?.message || 'Unbekannter Fehler';
+                                alert(`Fehler beim Senden (lower): ${msg}`);
+                              }
                             }}
                             className="w-full bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700">
                             Lower

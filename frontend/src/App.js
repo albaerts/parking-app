@@ -1708,7 +1708,15 @@ const AccountManagement = () => {
       });
       
       setMessage('Profile updated successfully!');
-      setUser(response.data.user);
+      // Backend returns user data directly, not in a user field
+      if (response.data.id) {
+        setUser({
+          id: response.data.id,
+          email: response.data.email,
+          name: response.data.name,
+          role: response.data.role
+        });
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
       setError('Failed to update profile. Please try again.');

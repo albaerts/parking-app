@@ -2561,7 +2561,7 @@ const AddressAutocomplete = ({ value, onChange, onPlaceSelected }) => {
         params.lat = userLoc.lat;
         params.lon = userLoc.lng;
       }
-      const res = await axios.get(`${API}/api/autocomplete`, { params });
+      const res = await axios.get(`${API}/autocomplete`, { params });
       return Array.isArray(res.data) ? res.data : [];
     } catch (e) {
       console.warn('Autocomplete API error:', e?.response?.data || e.message);

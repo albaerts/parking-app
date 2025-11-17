@@ -13,7 +13,7 @@
 // ========== CONFIGURATION ==========
 const char* DEVICE_ID = "PARK_DEVICE_001";
 const char* API_HOST = "parking.gashis.ch";
-const char* API_BASE = "/api";
+const char* API_BASE = "";  // Empty - endpoints already include full path
 const int API_PORT = 443;  // HTTPS
 const char* APN = "gprs.swisscom.ch";
 

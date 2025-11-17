@@ -5507,7 +5507,7 @@ const OwnerDashboard = () => {
 
 // Owner Account Management Component - Enhanced version like user account management
 const OwnerAccountManagement = ({ spots, ownerBookings, user }) => {
-  const { setUser, token, logout } = useAuth();
+  const { token, logout } = useAuth();
   const [activeSection, setActiveSection] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -5601,12 +5601,11 @@ const OwnerAccountManagement = ({ spots, ownerBookings, user }) => {
         updateData.date_of_birth = new Date(updateData.date_of_birth).toISOString();
       }
 
-      const response = await axios.put(`${API}/user/profile`, updateData, {
+      await axios.put(`${API}/user/profile`, updateData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       setMessage('Profil erfolgreich aktualisiert!');
-      setUser(response.data.user);
     } catch (error) {
       console.error('Error updating profile:', error);
       setError('Fehler beim Aktualisieren des Profils. Bitte versuchen Sie es erneut.');

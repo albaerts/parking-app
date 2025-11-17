@@ -1559,10 +1559,12 @@ async def assign_device_to_spot(payload: dict, authorization: str = Header(None)
 
     # If we have a JWT or real token, try to decode and extract role/email
     if token and not token.startswith('dev-token-'):
-        payload = auth.decode_token(token)
-        if payload:
-            role = payload.get('role')
-            owner_email = payload.get('sub') or payload.get('email')
+        token_data = auth.decode_token(token)
+        if token_data:
+            role = token_data.get('role')
+            owner_email = token_data.get('sub') or token_data.get('email')
+    
+    print(f"[DEBUG] assign_device: hardware_id={hardware_id}, spot_id={spot_id}, owner_email={owner_email}, role={role}")
 
     if role not in ('owner','admin'):
         raise HTTPException(status_code=403, detail='Forbidden')

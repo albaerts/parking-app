@@ -308,10 +308,9 @@ const InteractiveMap = ({ userLocation, parkingSpots = [] }) => {
                             onClick={async () => {
                               try {
                                 await sendHardwareCommandSimple('PARK_DEVICE_001', 'raise_barrier');
-                                alert('Raise queued');
+                                console.log('Raise queued');
                               } catch (e) {
-                                const msg = e?.response?.data?.detail || e?.response?.data || e?.message || 'Unbekannter Fehler';
-                                alert(`Fehler beim Senden (raise): ${msg}`);
+                                console.error('Fehler beim Senden (raise):', e?.response?.data || e?.message || e);
                               }
                             }}
                             className="w-full bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
@@ -321,10 +320,9 @@ const InteractiveMap = ({ userLocation, parkingSpots = [] }) => {
                             onClick={async () => {
                               try {
                                 await sendHardwareCommandSimple('PARK_DEVICE_001', 'lower_barrier');
-                                alert('Lower queued');
+                                console.log('Lower queued');
                               } catch (e) {
-                                const msg = e?.response?.data?.detail || e?.response?.data || e?.message || 'Unbekannter Fehler';
-                                alert(`Fehler beim Senden (lower): ${msg}`);
+                                console.error('Fehler beim Senden (lower):', e?.response?.data || e?.message || e);
                               }
                             }}
                             className="w-full bg-red-600 text-white px-2 py-1 rounded text-xs hover:bg-red-700">
@@ -3081,12 +3079,9 @@ const OwnerDashboard = () => {
       // sendHardwareCommandSimple(urlPath) returns the backend response
       await sendHardwareCommandSimple(deviceId, command, {});
       setManualStatus('ok');
-      // small confirmation for owner
-      alert(`Command queued: ${command}`);
     } catch (err) {
       console.error('Manual command failed:', err);
       setManualStatus('error');
-      alert(`Failed to send command: ${err?.message || err}`);
     }
   };
 

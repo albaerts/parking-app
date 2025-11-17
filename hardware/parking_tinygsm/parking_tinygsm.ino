@@ -172,7 +172,9 @@ String waitForHTTPResponse(unsigned long timeout = 30000) {
   return response;
 }
 
-bool httpRequest(String method, String endpoint, String payload = "") {
+// Perform HTTP(S) request and optionally return body (for GET)
+// Returns true on 2xx and fills outBody if provided
+bool httpRequest(String method, String endpoint, String payload = "", String *outBody = nullptr) {
   String url = "https://" + String(API_HOST) + String(API_BASE) + endpoint;
   Serial.println("📡 " + method + " " + url);
   
@@ -228,10 +230,11 @@ bool httpRequest(String method, String endpoint, String payload = "") {
       
       if (statusCode == "200" || statusCode == "201") {
         Serial.println("✅ HTTPS Success");
-        
         // Read response body
         String readResp = sendATCommand("AT+HTTPREAD", 5000);
-        
+        if (outBody != nullptr) {
+          *outBody = readResp;
+        }
         // Terminate HTTP session
         sendATCommand("AT+HTTPTERM", 1000);
         
@@ -270,9 +273,79 @@ void sendTelemetry() {
   httpRequest("POST", "/hardware/" + String(DEVICE_ID) + "/telemetry", payload);
 }
 
+void processCommand(const String &cmd) {
+  if (cmd == "raise_barrier") {
+    raiseBarrier();
+  } else if (cmd == "lower_barrier") {
+    lowerBarrier();
+  } else {
+    Serial.println("ℹ️  Unbekannter Command: " + cmd);
+  }
+}
+
+int extractJsonArray(String &src, const char *key, int startsAt = 0) {
+  String marker = String("\"") + key + String("\"");
+  int k = src.indexOf(marker, startsAt);
+  if (k < 0) return -1;
+  int arrStart = src.indexOf('[', k);
+  return arrStart;
+}
+
+bool findNextCommand(String &src, int &pos, int &idOut, String &cmdOut) {
+  int idKey = src.indexOf("\"id\"", pos);
+  int cmdKey = src.indexOf("\"command\"", pos);
+  if (idKey < 0 || cmdKey < 0) return false;
+  int idColon = src.indexOf(':', idKey);
+  int idComma = src.indexOf(',', idColon);
+  String idStr = src.substring(idColon+1, idComma);
+  idStr.trim();
+  idOut = idStr.toInt();
+
+  int cmdColon = src.indexOf(':', cmdKey);
+  int q1 = src.indexOf('"', cmdColon+1);
+  int q2 = src.indexOf('"', q1+1);
+  if (q1 < 0 || q2 < 0) return false;
+  cmdOut = src.substring(q1+1, q2);
+  pos = q2 + 1;
+  return true;
+}
+
 void pollCommands() {
   Serial.println("📥 Hole Commands...");
-  httpRequest("GET", "/hardware/" + String(DEVICE_ID) + "/commands");
+  String body;
+  if (!httpRequest("GET", "/hardware/" + String(DEVICE_ID) + "/commands", "", &body)) {
+    Serial.println("❌ Commands holen fehlgeschlagen");
+    return;
+  }
+
+  // Body enthält AT+HTTPREAD Ausgabe inkl. OK, filtere JSON grob heraus
+  int lb = body.indexOf('{');
+  int rb = body.lastIndexOf('}');
+  if (lb < 0 || rb <= lb) {
+    Serial.println("ℹ️  Keine JSON-Antwort erkannt");
+    return;
+  }
+  String json = body.substring(lb, rb+1);
+  // Finde commands-Array
+  int arrStart = extractJsonArray(json, "commands", 0);
+  if (arrStart < 0) {
+    Serial.println("ℹ️  Keine commands im JSON");
+    return;
+  }
+  int pos = arrStart;
+  while (true) {
+    int idVal = 0; String cmd;
+    if (!findNextCommand(json, pos, idVal, cmd)) break;
+    Serial.printf("➡️  Command id=%d cmd=%s\n", idVal, cmd.c_str());
+    processCommand(cmd);
+    // Ack senden
+    String ackPath = "/hardware/" + String(DEVICE_ID) + "/commands/" + String(idVal) + "/ack";
+    if (httpRequest("POST", ackPath, "{}")) {
+      Serial.printf("✅ Ack gesendet für id=%d\n", idVal);
+    } else {
+      Serial.printf("⚠️  Ack fehlgeschlagen für id=%d\n", idVal);
+    }
+  }
 }
 
 // ========== SETUP ==========

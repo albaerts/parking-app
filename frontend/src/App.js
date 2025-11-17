@@ -1707,16 +1707,21 @@ const AccountManagement = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      console.log('Profile update response:', response.data);
+      
       setMessage('Profile updated successfully!');
-      // Backend returns user data directly, not in a user field
-      if (response.data.id) {
-        setUser({
-          id: response.data.id,
-          email: response.data.email,
-          name: response.data.name,
-          role: response.data.role
-        });
-      }
+      // Update user context with response data
+      const updatedUser = {
+        id: response.data.id,
+        email: response.data.email,
+        name: response.data.name,
+        role: response.data.role
+      };
+      console.log('Setting user to:', updatedUser);
+      setUser(updatedUser);
+      
+      // Reload the full profile data
+      await loadUserProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
       setError('Failed to update profile. Please try again.');

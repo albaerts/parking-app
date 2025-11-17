@@ -943,6 +943,10 @@ async def get_stats():
         
     except sqlite3.Error as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/stats")
+async def get_stats_alias():
+    return await get_stats()
     
 @app.get("/parking-sessions")
 async def get_parking_sessions():
@@ -1195,6 +1199,21 @@ async def ack_hardware_command(hardware_id: str, cmd_id: int, payload: dict = No
         raise HTTPException(status_code=500, detail=f"Ack error: {e}")
 
 
+# Aliases without /api prefix to support production proxy mapping for hardware endpoints
+@app.post('/hardware/{hardware_id}/commands/queue')
+async def queue_hardware_command_alias(hardware_id: str, request: Request, authorization: str = Header(None)):
+    return await queue_hardware_command(hardware_id, request, authorization)
+
+
+@app.get('/hardware/{hardware_id}/commands')
+async def poll_hardware_commands_alias(hardware_id: str):
+    return await poll_hardware_commands(hardware_id)
+
+
+@app.post('/hardware/{hardware_id}/commands/{cmd_id}/ack')
+async def ack_hardware_command_alias(hardware_id: str, cmd_id: int, payload: dict = None):
+    return await ack_hardware_command(hardware_id, cmd_id, payload)
+
  
 
 
@@ -1426,19 +1445,12 @@ async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetr
         conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
 
-        # Upsert device entry and update telemetry columns
-        cursor.execute('SELECT id, parking_spot_id FROM hardware_devices WHERE hardware_id = ?', (hardware_id,))
+        cursor.execute('SELECT id FROM hardware_devices WHERE hardware_id = ?', (hardware_id,))
         row = cursor.fetchone()
         now = payload.timestamp.isoformat() if payload.timestamp else datetime.now().isoformat()
         last_mag_json = json.dumps(payload.last_mag) if payload.last_mag is not None else None
 
-        assigned_spot_id = None
         if row:
-            # row[0] = id, row[1] = parking_spot_id
-            try:
-                assigned_spot_id = row[1]
-            except Exception:
-                assigned_spot_id = None
             cursor.execute('''
                 UPDATE hardware_devices SET last_heartbeat = ?, battery_level = ?, rssi = ?, occupancy = ?, last_mag = ?
                 WHERE hardware_id = ?
@@ -1448,21 +1460,14 @@ async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetr
                 INSERT INTO hardware_devices (hardware_id, owner_email, parking_spot_id, created_at, last_heartbeat, battery_level, rssi, occupancy, last_mag)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (hardware_id, None, None, datetime.now().isoformat(), now, payload.battery_level, payload.rssi, payload.occupancy, last_mag_json))
-            assigned_spot_id = None
 
-        # If device is assigned to a parking spot and telemetry contains occupancy, sync spot status
+        # Sync parking spot status if device is assigned
         try:
-            occ = payload.occupancy if hasattr(payload, 'occupancy') else None
-            if occ and assigned_spot_id:
-                # Normalize allowed values
-                allowed = { 'free', 'occupied', 'reserved' }
-                new_status = occ if occ in allowed else None
-                if new_status:
-                    cursor.execute('''
-                        UPDATE parking_spots SET status = ? WHERE id = ?
-                    ''', (new_status, assigned_spot_id))
+            cursor.execute('SELECT parking_spot_id FROM hardware_devices WHERE hardware_id = ?', (hardware_id,))
+            ps_row = cursor.fetchone()
+            if ps_row and ps_row[0] is not None and payload.occupancy in ("free", "occupied", "reserved"):
+                cursor.execute('UPDATE parking_spots SET status = ? WHERE id = ?', (payload.occupancy, ps_row[0]))
         except Exception:
-            # Do not fail telemetry on sync errors; continue
             pass
 
         conn.commit()
@@ -1470,6 +1475,42 @@ async def receive_hardware_telemetry(hardware_id: str, payload: HardwareTelemetr
         return {"status": "ok", "hardware_id": hardware_id, "last_heartbeat": now}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Telemetry error: {e}")
+
+
+@app.get('/hardware/{hardware_id}/telemetry')
+async def get_hardware_telemetry(hardware_id: str):
+    """Return latest telemetry for a given hardware device."""
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT hardware_id, owner_email, parking_spot_id, created_at, last_heartbeat, battery_level, rssi, occupancy, last_mag
+            FROM hardware_devices WHERE hardware_id = ?
+        ''', (hardware_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            raise HTTPException(status_code=404, detail='Hardware device not found')
+
+        last_mag = json.loads(row[8]) if row[8] else None
+        telemetry = {
+            'last_heartbeat': row[4],
+            'battery_level': row[5],
+            'rssi': row[6],
+            'occupancy': row[7],
+            'last_mag': last_mag
+        }
+        return {
+            'hardware_id': row[0],
+            'owner_email': row[1],
+            'parking_spot_id': row[2],
+            'created_at': row[3],
+            'telemetry': telemetry
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get('/owner/devices')

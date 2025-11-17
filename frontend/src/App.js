@@ -3125,6 +3125,16 @@ const OwnerDashboard = () => {
     }
   }, [activeTab]);
 
+  // Update assignSpotId when ownerDevices changes (to show current assignment)
+  useEffect(() => {
+    if (ownerDevices.length > 0 && assignHardwareId) {
+      const device = ownerDevices.find(d => d.hardware_id === assignHardwareId);
+      if (device && device.parking_spot_id) {
+        setAssignSpotId(String(device.parking_spot_id));
+      }
+    }
+  }, [ownerDevices, assignHardwareId]);
+
   const getUserLocation = () => {
     console.log('Owner requesting user location...');
     

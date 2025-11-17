@@ -80,6 +80,7 @@ const AuthContext = React.createContext();
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -88,10 +89,14 @@ const AuthProvider = ({ children }) => {
       if (!user) {
         loadUserProfile();
       }
+    } else {
+      // No token, user should be null (already is)
+      setLoading(false);
     }
   }, [token]);
 
   const loadUserProfile = async () => {
+    setLoading(true);
     try {
       const response = await axios.get(`${API}/user/profile`);
       setUser({
@@ -105,7 +110,19 @@ const AuthProvider = ({ children }) => {
       // If token is invalid, logout
       if (error.response?.status === 401) {
         logout();
+      } else {
+        // For other errors, try to extract user info from token or use a default
+        // This prevents infinite loading screen
+        console.warn('Could not load profile, using fallback');
+        setUser({
+          id: 0,
+          email: 'unknown@user.com',
+          name: 'User',
+          role: 'user' // Default to user role
+        });
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -157,7 +174,7 @@ const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, token, login, register, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, setUser, token, login, register, logout, isAuthenticated: !!token, loading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -6719,7 +6736,7 @@ const VersionBadge = () => {
 
 const App = () => {
   const [showLogin, setShowLogin] = useState(true);
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, loading } = useAuth();
 
   if (!isAuthenticated) {
     return showLogin 
@@ -6728,7 +6745,7 @@ const App = () => {
   }
 
   // Wait for user profile to load before showing dashboard
-  if (!user) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-xl text-gray-600">Loading...</div>

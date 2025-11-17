@@ -1,0 +1,60 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Smoke E2E",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"smoke_e2e.py"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Smoke API (prod)",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"scripts/smoke_api_only.py"
+			],
+			"options": {
+				"env": {
+					"BASE": "https://parking.gashis.ch/api"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "SSH: Server verbinden",
+			"type": "shell",
+			"command": "ssh",
+			"args": [
+				"${env:SSH_USER:deploy}@${env:SSH_HOST}"
+			],
+			"options": {
+				"env": {
+					"SSH_HOST": "",
+					"SSH_USER": "deploy"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		},
+		{
+			"label": "SSH: parking-prod",
+			"type": "shell",
+			"command": "ssh",
+			"args": [
+				"parking-prod"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "none"
+		}
+	]
+}

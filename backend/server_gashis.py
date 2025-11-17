@@ -597,8 +597,13 @@ async def create_parking_spot(
         user_id = user_data.get("user_id")
         role = user_data.get("role")
         
+        print(f"[DEBUG] create_parking_spot: user_data={user_data}, user_id={user_id}, role={role}")
+        
         if role != "owner":
             raise HTTPException(status_code=403, detail="Only owners can create parking spots")
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id missing in token")
         
         body = await request.json()
         

@@ -1633,7 +1633,7 @@ const ReviewsManagement = () => {
 
 // Account Management Component
 const AccountManagement = () => {
-  const { user, setUser, token } = useAuth();
+  const { user, token, logout } = useAuth();
   const [activeSection, setActiveSection] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -1703,24 +1703,13 @@ const AccountManagement = () => {
         updateData.date_of_birth = new Date(updateData.date_of_birth).toISOString();
       }
 
-      const response = await axios.put(`${API}/user/profile`, updateData, {
+      await axios.put(`${API}/user/profile`, updateData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('Profile update response:', response.data);
-      
       setMessage('Profile updated successfully!');
-      // Update user context with response data
-      const updatedUser = {
-        id: response.data.id,
-        email: response.data.email,
-        name: response.data.name,
-        role: response.data.role
-      };
-      console.log('Setting user to:', updatedUser);
-      setUser(updatedUser);
       
-      // Reload the full profile data
+      // Reload the profile data to refresh the form
       await loadUserProfile();
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -1805,10 +1794,9 @@ const AccountManagement = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Clear auth data and redirect
-      localStorage.removeItem('token');
-      setUser(null);
       alert('Account deleted successfully');
+      // Logout user after successful account deletion
+      logout();
     } catch (error) {
       console.error('Error deleting account:', error);
       setError(error.response?.data?.detail || 'Failed to delete account');
